@@ -3,11 +3,17 @@ import mongoose from "mongoose";
 
 @modelOptions({ schemaOptions: { _id: false } })
 export class NameModel {
- @prop({ required: true })
-  first!: string;
+  @prop()
+  first?: string;
 
-  @prop({ required: true })
-  last!: string;
+  @prop()
+  last?: string;
+
+  @prop()
+  firstName?: string;
+
+  @prop()
+  lastName?: string;
 }
 
 @modelOptions({ schemaOptions: { _id: false } })
@@ -45,13 +51,13 @@ export class Address {
 
 @modelOptions({ schemaOptions: { _id: false } })
 export class ContactInfo {
-  @prop({required: true })
-  phone!: string;
+  @prop()
+  phone?: string;
 
-  @prop({ required: true })
-  email!: string;
+  @prop()
+  email?: string;
 
-  @prop({required:true})
+  @prop()
   emergencyContact?: string;
 }
 

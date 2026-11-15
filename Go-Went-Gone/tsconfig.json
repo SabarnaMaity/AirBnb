@@ -19,6 +19,7 @@
     // React JSX (if you use React)
     "jsx": "react-jsx",
     // Misc
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true
   },

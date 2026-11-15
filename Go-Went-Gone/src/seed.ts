@@ -9,31 +9,58 @@ export async function autoSeed() {
     if (userCount === 0) {
       console.log("No users found in DB. Seeding initial accounts...");
       const guest = await UserModel.create({
-        name: { firstName: "Rahul", lastName: "Sharma" },
+        name: {
+          first: "Rahul",
+          last: "Sharma",
+          firstName: "Rahul",
+          lastName: "Sharma",
+        },
         email: "rahul@example.com",
         password: "password123",
         role: USERROLE.USER,
         wallet: 6000,
         address: { city: "Kolkata", state: "West Bengal", country: "India" },
-        contactInfo: { phone: "+91 9876543210" },
+        contactInfo: {
+          phone: "+91 9876543210",
+          email: "rahul@example.com",
+          emergencyContact: "+91 9876543211",
+        },
       });
 
       const host = await UserModel.create({
-        name: { firstName: "Anisur", lastName: "Rahman" },
+        name: {
+          first: "Anisur",
+          last: "Rahman",
+          firstName: "Anisur",
+          lastName: "Rahman",
+        },
         email: "host@example.com",
         password: "password123",
         role: USERROLE.MERCHANT,
         wallet: 15000,
         address: { city: "Darjeeling", state: "West Bengal", country: "India" },
-        contactInfo: { phone: "+91 9123456780" },
+        contactInfo: {
+          phone: "+91 9123456780",
+          email: "host@example.com",
+          emergencyContact: "+91 9123456781",
+        },
       });
 
       const admin = await UserModel.create({
-        name: { firstName: "Sabarna", lastName: "Maity" },
+        name: {
+          first: "Sabarna",
+          last: "Maity",
+          firstName: "Sabarna",
+          lastName: "Maity",
+        },
         email: "admin@example.com",
         password: "password123",
         role: USERROLE.ADMIN,
         wallet: 50000,
+        contactInfo: {
+          phone: "+91 9999999999",
+          email: "admin@example.com",
+        },
       });
 
       console.log("Seeding initial property & rooms...");

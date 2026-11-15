@@ -174,4 +174,54 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ roomId, images }),
     }),
+
+  // Cloudinary Image Upload
+  uploadImage: async (fileOrDataUrl: File | string): Promise<{ success: boolean; data?: { url: string; public_id: string }; message?: string }> => {
+    try {
+      if (typeof fileOrDataUrl === "string") {
+        return await request<{ url: string; public_id: string }>("/api/upload", {
+          method: "POST",
+          body: JSON.stringify({ image: fileOrDataUrl }),
+        });
+      } else {
+        const formData = new FormData();
+        formData.append("image", fileOrDataUrl);
+        const res = await fetch(`${API_BASE_URL}/api/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        const result = await res.json();
+        return {
+          success: res.ok,
+          data: result.data,
+          message: typeof result.message === "string" ? result.message : (res.ok ? "Success" : "Upload failed"),
+        };
+      }
+    } catch (e: any) {
+      return { success: false, message: e.message || "Failed to upload image to Cloudinary" };
+    }
+  },
+
+  uploadMultipleImages: async (
+    files: File[]
+  ): Promise<{ success: boolean; data?: { url: string; public_id: string }[]; message?: string }> => {
+    try {
+      const formData = new FormData();
+      files.forEach((file) => {
+        formData.append("images", file);
+      });
+      const res = await fetch(`${API_BASE_URL}/api/upload/multiple`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+      return {
+        success: res.ok,
+        data: result.data,
+        message: typeof result.message === "string" ? result.message : (res.ok ? "Success" : "Upload failed"),
+      };
+    } catch (e: any) {
+      return { success: false, message: e.message || "Failed to upload images to Cloudinary" };
+    }
+  },
 };

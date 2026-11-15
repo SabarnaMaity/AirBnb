@@ -4,12 +4,6 @@ import { Property, PropertyModel } from "./merchant.model";
 import { propertyServics, roomServics } from "./merchant.service";
 import { Room } from "./room.model";
 import { ApiResponse } from "../../Base/Base_Class/response";
-import * as geoip from "geoip-lite";
-import { create } from "domain";
-import * as express from 'express';
-const app = express();
-app.set('trust proxy', true);
-
 
 export class propertyCotroller extends BaseController<Property> {
     constructor() {

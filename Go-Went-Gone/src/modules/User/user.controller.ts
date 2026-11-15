@@ -11,6 +11,23 @@ export class userController extends BaseController<User> {
     constructor() {
         super(new UserServics)
     }
+
+    handleCreate = async (req: Request, res: Response): Promise<void> => {
+        try {
+            if (req.body.name) {
+                const first = req.body.name.first || req.body.name.firstName || "";
+                const last = req.body.name.last || req.body.name.lastName || "";
+                req.body.name.first = first;
+                req.body.name.last = last;
+                req.body.name.firstName = first;
+                req.body.name.lastName = last;
+            }
+            const data = await this.service.create(req.body);
+            ApiResponse.success(res, "Created successfully", data, 201);
+        } catch (error: any) {
+            ApiResponse.error(res, "Error in handleCreate", 500, error.message);
+        }
+    };
 }
 
 export class likeController extends BaseController<LikeList> {

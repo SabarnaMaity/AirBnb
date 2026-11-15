@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
+import { useState, Suspense } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useLoginMutation, useRegisterMutation } from "@/hooks/useAuthMutations";
 import { USERROLE } from "@/types";
 import {
   Card,
@@ -11,64 +12,39 @@ import {
   Input,
   Button,
   Typography,
-  Divider,
   Space,
-  Tag,
   Radio,
-  message,
+  Alert,
 } from "antd";
 import {
-  UserOutlined,
   LockOutlined,
   MailOutlined,
   CompassOutlined,
-  ThunderboltFilled,
-  ShopOutlined,
-  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
-export default function LoginPage() {
-  const router = useRouter();
-  const { login, register } = useAuth();
-  const [activeTab, setActiveTab] = useState<string>("login");
-  const [loading, setLoading] = useState<boolean>(false);
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "register" ? "register" : "login";
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
 
-  // Quick One-Click Demo Login
-  const handleQuickLogin = async (email: string, role: string) => {
-    setLoading(true);
-    const res = await login({ email, password: "password123" });
-    setLoading(false);
+  const loginMutation = useLoginMutation();
+  const registerMutation = useRegisterMutation();
 
-    if (res.success) {
-      message.success(`Logged in as ${role}!`);
-      if (role === "admin") router.push("/admin");
-      else if (role === "merchant") router.push("/merchant");
-      else router.push("/user");
-    } else {
-      message.error(res.message || "Failed to log in. Please check backend.");
-    }
-  };
+  const isSubmitting = loginMutation.isPending || registerMutation.isPending;
 
   // Submit Login Form
-  const onFinishLogin = async (values: any) => {
-    setLoading(true);
-    const res = await login({ email: values.email, password: values.password });
-    setLoading(false);
-
-    if (res.success) {
-      message.success("Login successful!");
-      router.push("/user");
-    } else {
-      message.error(res.message || "Invalid email or password credentials.");
-    }
+  const onFinishLogin = (values: any) => {
+    loginMutation.mutate({
+      email: values.email,
+      password: values.password,
+    });
   };
 
   // Submit Register Form
-  const onFinishRegister = async (values: any) => {
-    setLoading(true);
-    const payload = {
+  const onFinishRegister = (values: any) => {
+    registerMutation.mutate({
       name: {
         firstName: values.firstName,
         lastName: values.lastName,
@@ -76,20 +52,8 @@ export default function LoginPage() {
       email: values.email,
       password: values.password,
       role: values.role || USERROLE.USER,
-      wallet: values.role === USERROLE.USER ? 1000 : 0, // Welcome credit for users
-    };
-
-    const res = await register(payload);
-    setLoading(false);
-
-    if (res.success) {
-      message.success("Account created successfully!");
-      if (values.role === USERROLE.MERCHANT) router.push("/merchant");
-      else if (values.role === USERROLE.ADMIN) router.push("/admin");
-      else router.push("/user");
-    } else {
-      message.error(res.message || "Registration failed. Try again.");
-    }
+      wallet: values.role === USERROLE.USER ? 1000 : 0, // Welcome credit for guests
+    });
   };
 
   return (
@@ -132,68 +96,30 @@ export default function LoginPage() {
             <CompassOutlined />
           </div>
           <Title level={3} style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
-            Go-Went-Gone Portal
+            Welcome to Go-Went-Gone
           </Title>
           <Text type="secondary" style={{ fontSize: 13 }}>
-            Sign in to access your User, Host, or Admin dashboard
+            Sign in to manage bookings, host listings, and explore stays
           </Text>
         </div>
 
-        {/* Quick Demo Credentials */}
-        <div
-          style={{
-            background: "#f8fafc",
-            borderRadius: 14,
-            padding: 12,
-            marginBottom: 20,
-            border: "1px solid #e2e8f0",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              marginBottom: 8,
-              fontSize: 11,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              color: "#64748b",
-            }}
-          >
-            <ThunderboltFilled style={{ color: "#f59e0b" }} />
-            <span>One-Click Quick Login (Demo)</span>
-          </div>
-          <Space size={6} wrap style={{ width: "100%" }}>
-            <Button
-              size="small"
-              icon={<UserOutlined />}
-              onClick={() => handleQuickLogin("rahul@example.com", "user")}
-              loading={loading}
-              style={{ fontSize: 11, fontWeight: 600, borderRadius: 8 }}
-            >
-              Guest (Rahul)
-            </Button>
-            <Button
-              size="small"
-              icon={<ShopOutlined />}
-              onClick={() => handleQuickLogin("host@example.com", "merchant")}
-              loading={loading}
-              style={{ fontSize: 11, fontWeight: 600, borderRadius: 8 }}
-            >
-              Host (Anisur)
-            </Button>
-            <Button
-              size="small"
-              icon={<SafetyCertificateOutlined />}
-              onClick={() => handleQuickLogin("admin@example.com", "admin")}
-              loading={loading}
-              style={{ fontSize: 11, fontWeight: 600, borderRadius: 8 }}
-            >
-              Super Admin
-            </Button>
-          </Space>
-        </div>
+        {/* Mutation Errors */}
+        {loginMutation.isError && activeTab === "login" && (
+          <Alert
+            type="error"
+            message={loginMutation.error.message || "Login failed"}
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+          />
+        )}
+        {registerMutation.isError && activeTab === "register" && (
+          <Alert
+            type="error"
+            message={registerMutation.error.message || "Registration failed"}
+            showIcon
+            style={{ marginBottom: 16, borderRadius: 8 }}
+          />
+        )}
 
         {/* Form Tabs */}
         <Tabs
@@ -205,7 +131,12 @@ export default function LoginPage() {
               key: "login",
               label: "Sign In",
               children: (
-                <Form layout="vertical" onFinish={onFinishLogin} style={{ marginTop: 12 }}>
+                <Form
+                  layout="vertical"
+                  onFinish={onFinishLogin}
+                  disabled={isSubmitting}
+                  style={{ marginTop: 12 }}
+                >
                   <Form.Item
                     label="Email Address"
                     name="email"
@@ -238,7 +169,7 @@ export default function LoginPage() {
                     htmlType="submit"
                     block
                     size="large"
-                    loading={loading}
+                    loading={loginMutation.isPending}
                     style={{
                       backgroundColor: "#ff385c",
                       borderColor: "#ff385c",
@@ -247,7 +178,7 @@ export default function LoginPage() {
                       marginTop: 8,
                     }}
                   >
-                    Sign In
+                    {loginMutation.isPending ? "Authenticating..." : "Sign In"}
                   </Button>
                 </Form>
               ),
@@ -259,6 +190,7 @@ export default function LoginPage() {
                 <Form
                   layout="vertical"
                   onFinish={onFinishRegister}
+                  disabled={isSubmitting}
                   initialValues={{ role: USERROLE.USER }}
                   style={{ marginTop: 12 }}
                 >
@@ -330,7 +262,7 @@ export default function LoginPage() {
                     htmlType="submit"
                     block
                     size="large"
-                    loading={loading}
+                    loading={registerMutation.isPending}
                     style={{
                       backgroundColor: "#ff385c",
                       borderColor: "#ff385c",
@@ -339,7 +271,7 @@ export default function LoginPage() {
                       marginTop: 8,
                     }}
                   >
-                    Register Account
+                    {registerMutation.isPending ? "Creating Account..." : "Register Account"}
                   </Button>
                 </Form>
               ),
@@ -348,5 +280,13 @@ export default function LoginPage() {
         />
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: "center", padding: "50px" }}>Loading Login...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
