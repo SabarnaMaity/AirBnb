@@ -21,6 +21,7 @@ router.get("/room/getall",RoomController.handelGetAll)
 router.get("/room/find",RoomController.handelfind)
 router.put("/room/update/:_id",RoomController.handelUpdate)
 router.put("/room/add-image",RoomController.handelAddImage)
+router.delete("/room/delete",RoomController.handelDelete)
 
 
 export const MerchnatRouter  = router;

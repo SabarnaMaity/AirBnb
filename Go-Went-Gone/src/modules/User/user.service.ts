@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { BaseService } from "../../Base/Base_Class/Base.service";
-import { AddMoney, PaymentStatus } from "../../Base/Base_Class/baseEnum";
+import { AddMoney, PaymentStatus, PROPERTYSTATUS } from "../../Base/Base_Class/baseEnum";
 import { ApiResponse } from "../../Base/Base_Class/response";
 import { Booking, BookingHistory, BookingHistoryModel, BookingModel, CommissionModel, LikeList, LikeListModel, Notification, NotificationModel, PaymentModel, TotalBookingAmountModel } from "../../Base/Base_Model/common_Model";
 import { RoomModel } from "../Merchant/room.model";
@@ -74,6 +74,22 @@ export class bookingService extends BaseService<Booking> {
         super(BookingModel)
     }
 
+    async getAll() {
+        try {
+            const data = await this.model.find({})
+                .populate("user")
+                .populate({
+                    path: "room",
+                    populate: { path: "property" }
+                })
+                .sort({ createdAt: -1 });
+            return data;
+        } catch (error: any) {
+            console.log(error);
+            return error;
+        }
+    }
+
 async bookingCreate(userId: string, roomId: string, duration: number, startDateI: Date) {
         try {
             if (!userId || !roomId || !duration) {
@@ -89,8 +105,14 @@ async bookingCreate(userId: string, roomId: string, duration: number, startDateI
                 throw new Error("Room not found");
             }
 
+            // Verify that the property is open for bookings
+            const property = await PropertyModel.findById(room.property);
+            if (!property || property.status === PROPERTYSTATUS.CLOSE) {
+                throw new Error("This property is currently closed for bookings by the host. Please try another stay.");
+            }
+
             if (room.isAvalabile === false) {
-                throw new Error("Room not available");
+                throw new Error("Room is already occupied or reserved");
             }
 
             const price = room.price * duration;
@@ -129,6 +151,7 @@ async bookingCreate(userId: string, roomId: string, duration: number, startDateI
                 duration,
                 startDate: start,
                 endDate: end,
+                status: "CONFIRMED",
                 Payment: [payment._id]
             });
             const payableAmount = price - price * 0.15;
@@ -239,6 +262,18 @@ export class checkOutService extends BaseService<MerchantPayment>{
 
                         await PropertyModel.findByIdAndUpdate(merchantPaymentData.property,{ $inc: { wallet: merchantPaymentData.payableAmount } }, { new: true })
                         await RoomModel.findByIdAndUpdate(merchantPaymentData.room,{isAvalabile:true},{new:true})
+
+                        // Mark corresponding active booking as CHECKED_OUT
+                        await BookingModel.findOneAndUpdate(
+                            {
+                                user: merchantPaymentData.userId,
+                                room: merchantPaymentData.room,
+                                status: { $ne: "REFUNDED" },
+                            },
+                            { status: "CHECKED_OUT" },
+                            { sort: { createdAt: -1 } }
+                        );
+
                         return commission
         } catch (error) {
             console.log(error)

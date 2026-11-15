@@ -335,6 +335,10 @@ export default function HomePage() {
           <Row gutter={[24, 28]}>
             {filteredRooms.map((room) => {
               const isLiked = likedRooms.includes(room._id);
+              const isPropClosed =
+                typeof room.property === "object" && room.property !== null
+                  ? (room.property as any).status === "close"
+                  : false;
               const roomImage =
                 room.images?.[0] ||
                 "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80";
@@ -364,23 +368,43 @@ export default function HomePage() {
                               transition: "transform 0.3s",
                             }}
                           />
-                          <Tag
-                            style={{
-                              position: "absolute",
-                              top: 12,
-                              left: 12,
-                              background: "rgba(255, 255, 255, 0.9)",
-                              backdropFilter: "blur(6px)",
-                              color: "#0f172a",
-                              fontWeight: 700,
-                              borderRadius: 16,
-                              padding: "2px 10px",
-                              border: "none",
-                              fontSize: 11,
-                            }}
-                          >
-                            Guest Favorite
-                          </Tag>
+                          {isPropClosed ? (
+                            <Tag
+                              style={{
+                                position: "absolute",
+                                top: 12,
+                                left: 12,
+                                background: "rgba(220, 38, 38, 0.9)",
+                                backdropFilter: "blur(6px)",
+                                color: "#ffffff",
+                                fontWeight: 700,
+                                borderRadius: 16,
+                                padding: "2px 10px",
+                                border: "none",
+                                fontSize: 11,
+                              }}
+                            >
+                              Bookings Paused
+                            </Tag>
+                          ) : (
+                            <Tag
+                              style={{
+                                position: "absolute",
+                                top: 12,
+                                left: 12,
+                                background: "rgba(255, 255, 255, 0.9)",
+                                backdropFilter: "blur(6px)",
+                                color: "#0f172a",
+                                fontWeight: 700,
+                                borderRadius: 16,
+                                padding: "2px 10px",
+                                border: "none",
+                                fontSize: 11,
+                              }}
+                            >
+                              Guest Favorite
+                            </Tag>
+                          )}
 
                           <button
                             type="button"

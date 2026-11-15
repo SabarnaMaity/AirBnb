@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Room, AppNotification, USERROLE } from "@/types";
+import { Room, AppNotification, USERROLE, Property, PROPERTYSTATUS, PaymentStatus } from "@/types";
 import { api } from "@/lib/api";
 import {
   Card,
@@ -48,7 +48,6 @@ import {
   UserOutlined,
   HomeOutlined,
   InfoCircleOutlined,
-  ClockCircleOutlined,
   PhoneOutlined,
   MailOutlined,
 } from "@ant-design/icons";
@@ -61,6 +60,8 @@ export default function UserPanel() {
 
   const [loading, setLoading] = useState<boolean>(true);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
@@ -120,10 +121,21 @@ export default function UserPanel() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Rooms from backend
-      const roomsRes = await api.getAllRooms();
+      // 1. Fetch Rooms, Properties, Payments simultaneously
+      const [roomsRes, propsRes, payRes] = await Promise.all([
+        api.getAllRooms(),
+        api.getAllProperties(),
+        api.getAllPayments(),
+      ]);
+
       if (roomsRes.success && Array.isArray(roomsRes.data)) {
         setRooms(roomsRes.data);
+      }
+      if (propsRes.success && Array.isArray(propsRes.data)) {
+        setProperties(propsRes.data);
+      }
+      if (payRes.success && Array.isArray(payRes.data)) {
+        setPayments(payRes.data);
       }
 
       // 2. Fetch User-specific data if logged in
@@ -260,9 +272,25 @@ export default function UserPanel() {
     }
   };
 
+  // Check if target property is closed for bookingRoom
+  const isTargetPropertyClosed = (() => {
+    if (!bookingRoom) return false;
+    const propId = typeof bookingRoom.property === "object" ? (bookingRoom.property as any)?._id : bookingRoom.property;
+    const foundProp =
+      (typeof bookingRoom.property === "object" && bookingRoom.property !== null ? (bookingRoom.property as any) : null) ||
+      properties.find((p) => p._id === propId);
+    return foundProp?.status === PROPERTYSTATUS.CLOSE || foundProp?.status === "close";
+  })();
+
   // Confirm Room Booking
   const handleConfirmBooking = async () => {
     if (!bookingRoom) return;
+
+    if (isTargetPropertyClosed) {
+      message.error("This property is currently closed for bookings by the host.");
+      return;
+    }
+
     const totalPrice = bookingRoom.price * bookDuration;
 
     if ((user.wallet || 0) < totalPrice) {
@@ -573,6 +601,21 @@ export default function UserPanel() {
 
                       const tripCode = booking._id ? booking._id.slice(-6).toUpperCase() : "TRIP";
 
+                      // Match payment from payments array
+                      const matchingPayment = payments.find(
+                        (p) =>
+                          (p.room === roomId || p.room?._id === roomId) &&
+                          (p.userId === user._id || p.userId?._id === user._id)
+                      );
+
+                      const isSettledOrCheckedOut =
+                        booking.status === "CHECKED_OUT" ||
+                        matchingPayment?.status === PaymentStatus.SEND;
+
+                      const isRefunded =
+                        booking.status === "REFUNDED" ||
+                        matchingPayment?.status === PaymentStatus.REFUND;
+
                       return (
                         <Card
                           key={booking._id}
@@ -627,9 +670,19 @@ export default function UserPanel() {
                             <Col xs={24} sm={10} md={12}>
                               <Space orientation="vertical" size={4} style={{ width: "100%" }}>
                                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                                  <Tag color="success" style={{ fontWeight: 700, borderRadius: 6 }}>
-                                    CONFIRMED
-                                  </Tag>
+                                  {isSettledOrCheckedOut ? (
+                                    <Tag color="purple" style={{ fontWeight: 700, borderRadius: 6 }}>
+                                      STAY COMPLETED
+                                    </Tag>
+                                  ) : isRefunded ? (
+                                    <Tag color="error" style={{ fontWeight: 700, borderRadius: 6 }}>
+                                      CANCELLED & REFUNDED
+                                    </Tag>
+                                  ) : (
+                                    <Tag color="success" style={{ fontWeight: 700, borderRadius: 6 }}>
+                                      CONFIRMED RESERVATION
+                                    </Tag>
+                                  )}
                                   <Tag color="blue" style={{ fontWeight: 600, borderRadius: 6 }}>
                                     Ref: #{tripCode}
                                   </Tag>
@@ -700,8 +753,15 @@ export default function UserPanel() {
                                   <Text strong style={{ fontSize: 24, color: "#0f172a", display: "block" }}>
                                     ₹{booking.price?.toLocaleString()}
                                   </Text>
-                                  <Tag color="cyan" style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, marginTop: 2 }}>
-                                    Paid via Wallet
+                                  <Tag
+                                    color={isSettledOrCheckedOut ? "default" : isRefunded ? "error" : "cyan"}
+                                    style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, marginTop: 2 }}
+                                  >
+                                    {isSettledOrCheckedOut
+                                      ? "Checked Out"
+                                      : isRefunded
+                                      ? "Refunded to Wallet"
+                                      : "Paid via Wallet"}
                                   </Tag>
                                 </div>
 
@@ -715,23 +775,33 @@ export default function UserPanel() {
                                     Details
                                   </Button>
 
-                                  <Popconfirm
-                                    title="Cancel this reservation?"
-                                    description="100% instant refund will be credited directly to your digital wallet."
-                                    onConfirm={() => handleRefund(booking._id)}
-                                    okText="Yes, Cancel & Refund"
-                                    cancelText="Keep Stay"
-                                    okButtonProps={{ danger: true }}
-                                  >
-                                    <Button
-                                      size="small"
-                                      danger
-                                      icon={<RollbackOutlined />}
-                                      style={{ borderRadius: 8, fontWeight: 600 }}
+                                  {isSettledOrCheckedOut ? (
+                                    <Tag color="default" style={{ fontWeight: 600, padding: "3px 8px", borderRadius: 6 }}>
+                                      ✓ Completed
+                                    </Tag>
+                                  ) : isRefunded ? (
+                                    <Tag color="red" style={{ fontWeight: 600, padding: "3px 8px", borderRadius: 6 }}>
+                                      Refunded
+                                    </Tag>
+                                  ) : (
+                                    <Popconfirm
+                                      title="Cancel this reservation?"
+                                      description="100% instant refund will be credited directly to your digital wallet."
+                                      onConfirm={() => handleRefund(booking._id)}
+                                      okText="Yes, Cancel & Refund"
+                                      cancelText="Keep Stay"
+                                      okButtonProps={{ danger: true }}
                                     >
-                                      Cancel & Refund
-                                    </Button>
-                                  </Popconfirm>
+                                      <Button
+                                        size="small"
+                                        danger
+                                        icon={<RollbackOutlined />}
+                                        style={{ borderRadius: 8, fontWeight: 600 }}
+                                      >
+                                        Cancel & Refund
+                                      </Button>
+                                    </Popconfirm>
+                                  )}
                                 </Space>
                               </div>
                             </Col>
@@ -974,6 +1044,18 @@ export default function UserPanel() {
                         room.images?.[0] ||
                         "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80";
 
+                      // Check parent property status
+                      const propId = typeof room.property === "object" ? (room.property as any)?._id : room.property;
+                      const matchedProperty =
+                        (typeof room.property === "object" && room.property !== null ? (room.property as any) : null) ||
+                        properties.find((p) => p._id === propId);
+
+                      const isPropertyClosed =
+                        matchedProperty?.status === PROPERTYSTATUS.CLOSE ||
+                        matchedProperty?.status === "close";
+
+                      const isRoomAvailable = room.isAvalabile && !isPropertyClosed;
+
                       return (
                         <Col xs={24} sm={12} lg={8} key={room._id}>
                           <Card
@@ -985,6 +1067,7 @@ export default function UserPanel() {
                               height: "100%",
                               display: "flex",
                               flexDirection: "column",
+                              opacity: isPropertyClosed ? 0.75 : 1,
                             }}
                             styles={{
                               body: {
@@ -1041,18 +1124,33 @@ export default function UserPanel() {
                                   }}
                                 />
 
-                                <Tag
-                                  color={room.isAvalabile ? "success" : "error"}
-                                  style={{
-                                    position: "absolute",
-                                    bottom: 10,
-                                    left: 12,
-                                    fontWeight: 700,
-                                    borderRadius: 6,
-                                  }}
-                                >
-                                  {room.isAvalabile ? "Available" : "Occupied"}
-                                </Tag>
+                                {isPropertyClosed ? (
+                                  <Tag
+                                    color="error"
+                                    style={{
+                                      position: "absolute",
+                                      bottom: 10,
+                                      left: 12,
+                                      fontWeight: 700,
+                                      borderRadius: 6,
+                                    }}
+                                  >
+                                    Bookings Closed
+                                  </Tag>
+                                ) : (
+                                  <Tag
+                                    color={room.isAvalabile ? "success" : "error"}
+                                    style={{
+                                      position: "absolute",
+                                      bottom: 10,
+                                      left: 12,
+                                      fontWeight: 700,
+                                      borderRadius: 6,
+                                    }}
+                                  >
+                                    {room.isAvalabile ? "Available" : "Occupied"}
+                                  </Tag>
+                                )}
                               </div>
                             }
                           >
@@ -1098,19 +1196,32 @@ export default function UserPanel() {
                                 </Text>
                               </div>
 
-                              <Button
-                                type="primary"
-                                disabled={!room.isAvalabile}
-                                onClick={() => setBookingRoom(room)}
-                                style={{
-                                  backgroundColor: room.isAvalabile ? "#ff385c" : undefined,
-                                  borderColor: room.isAvalabile ? "#ff385c" : undefined,
-                                  fontWeight: 700,
-                                  borderRadius: 8,
-                                }}
-                              >
-                                {room.isAvalabile ? "Reserve Stay" : "Reserved"}
-                              </Button>
+                              {isPropertyClosed ? (
+                                <Button
+                                  disabled
+                                  style={{
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    backgroundColor: "#f1f5f9",
+                                  }}
+                                >
+                                  Bookings Paused
+                                </Button>
+                              ) : (
+                                <Button
+                                  type="primary"
+                                  disabled={!room.isAvalabile}
+                                  onClick={() => setBookingRoom(room)}
+                                  style={{
+                                    backgroundColor: room.isAvalabile ? "#ff385c" : undefined,
+                                    borderColor: room.isAvalabile ? "#ff385c" : undefined,
+                                    fontWeight: 700,
+                                    borderRadius: 8,
+                                  }}
+                                >
+                                  {room.isAvalabile ? "Reserve Stay" : "Reserved"}
+                                </Button>
+                              )}
                             </div>
                           </Card>
                         </Col>
@@ -1185,29 +1296,58 @@ export default function UserPanel() {
           }
           open={!!selectedBookingDetail}
           onCancel={() => setSelectedBookingDetail(null)}
-          footer={[
-            <Button key="close" onClick={() => setSelectedBookingDetail(null)}>
-              Close
-            </Button>,
-            <Popconfirm
-              key="refund"
-              title="Cancel this reservation?"
-              description="100% instant refund will be credited directly to your digital wallet."
-              onConfirm={() => handleRefund(selectedBookingDetail.booking._id)}
-              okText="Yes, Cancel & Refund"
-              cancelText="Keep Stay"
-              okButtonProps={{ danger: true }}
-            >
-              <Button danger icon={<RollbackOutlined />}>
-                Cancel & Refund
-              </Button>
-            </Popconfirm>,
-          ]}
+          footer={(() => {
+            const b = selectedBookingDetail.booking;
+            const rId = typeof b.room === "object" ? b.room?._id : b.room;
+            const mPay = payments.find(
+              (p) =>
+                (p.room === rId || p.room?._id === rId) &&
+                (p.userId === user._id || p.userId?._id === user._id)
+            );
+            const isSettled = b.status === "CHECKED_OUT" || mPay?.status === PaymentStatus.SEND;
+            const isRef = b.status === "REFUNDED" || mPay?.status === PaymentStatus.REFUND;
+
+            if (isSettled || isRef) {
+              return [
+                <Button key="close" type="primary" onClick={() => setSelectedBookingDetail(null)}>
+                  Close
+                </Button>,
+              ];
+            }
+
+            return [
+              <Button key="close" onClick={() => setSelectedBookingDetail(null)}>
+                Keep Stay
+              </Button>,
+              <Popconfirm
+                key="refund"
+                title="Cancel this reservation?"
+                description="100% instant refund will be credited directly to your digital wallet."
+                onConfirm={() => handleRefund(selectedBookingDetail.booking._id)}
+                okText="Yes, Cancel & Refund"
+                cancelText="Keep Stay"
+                okButtonProps={{ danger: true }}
+              >
+                <Button danger icon={<RollbackOutlined />}>
+                  Cancel & Refund
+                </Button>
+              </Popconfirm>,
+            ];
+          })()}
           width={640}
         >
           {(() => {
             const b = selectedBookingDetail.booking;
             const r = selectedBookingDetail.room;
+            const rId = typeof b.room === "object" ? b.room?._id : b.room;
+            const mPay = payments.find(
+              (p) =>
+                (p.room === rId || p.room?._id === rId) &&
+                (p.userId === user._id || p.userId?._id === user._id)
+            );
+            const isSettled = b.status === "CHECKED_OUT" || mPay?.status === PaymentStatus.SEND;
+            const isRef = b.status === "REFUNDED" || mPay?.status === PaymentStatus.REFUND;
+
             const checkIn = b.startDate ? new Date(b.startDate) : new Date();
             const checkOut = new Date(checkIn);
             checkOut.setDate(checkOut.getDate() + (b.duration || 1));
@@ -1228,6 +1368,15 @@ export default function UserPanel() {
                   <Descriptions.Item label="Reservation ID">
                     <Text code>#{b._id.slice(-8).toUpperCase()}</Text>
                   </Descriptions.Item>
+                  <Descriptions.Item label="Reservation Status">
+                    {isSettled ? (
+                      <Tag color="purple" style={{ fontWeight: 700 }}>Stay Completed • Checked Out</Tag>
+                    ) : isRef ? (
+                      <Tag color="error" style={{ fontWeight: 700 }}>Cancelled & Refunded</Tag>
+                    ) : (
+                      <Tag color="success" style={{ fontWeight: 700 }}>Active Reservation (Confirmed)</Tag>
+                    )}
+                  </Descriptions.Item>
                   <Descriptions.Item label="Room Name">
                     <Text strong>{r?.roomName || "Deluxe Suite"}</Text> (Room #{r?.roomNo || "N/A"})
                   </Descriptions.Item>
@@ -1246,7 +1395,13 @@ export default function UserPanel() {
                     </Text> (Paid via Digital Wallet)
                   </Descriptions.Item>
                   <Descriptions.Item label="Cancellation Policy">
-                    <Tag color="success">100% Instant Refund to Wallet</Tag>
+                    {isSettled ? (
+                      <Text type="secondary">Stay completed; checkout already settled into Host account.</Text>
+                    ) : isRef ? (
+                      <Text type="secondary">Already refunded to your digital wallet.</Text>
+                    ) : (
+                      <Tag color="success">100% Instant Refund to Wallet Available</Tag>
+                    )}
                   </Descriptions.Item>
                 </Descriptions>
               </div>
@@ -1334,7 +1489,9 @@ export default function UserPanel() {
           onCancel={() => setBookingRoom(null)}
           okText="Confirm & Pay via Wallet"
           okButtonProps={{
-            disabled: (user.wallet || 0) < bookingRoom.price * bookDuration,
+            disabled:
+              isTargetPropertyClosed ||
+              (user.wallet || 0) < bookingRoom.price * bookDuration,
             style: { backgroundColor: "#ff385c", borderColor: "#ff385c", fontWeight: 700 },
           }}
         >
@@ -1345,6 +1502,15 @@ export default function UserPanel() {
                 Room No: {bookingRoom.roomNo} • Rate: ₹{bookingRoom.price} / night
               </Text>
             </div>
+
+            {isTargetPropertyClosed && (
+              <Alert
+                type="error"
+                message="Property Bookings Closed"
+                description="The host has paused bookings for this property. This room cannot currently be reserved."
+                showIcon
+              />
+            )}
 
             <div>
               <Text strong style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
@@ -1399,7 +1565,7 @@ export default function UserPanel() {
               </Text>
             </div>
 
-            {(user.wallet || 0) < bookingRoom.price * bookDuration && (
+            {!isTargetPropertyClosed && (user.wallet || 0) < bookingRoom.price * bookDuration && (
               <Alert
                 type="error"
                 message="Insufficient balance! Please deposit money into your wallet first."

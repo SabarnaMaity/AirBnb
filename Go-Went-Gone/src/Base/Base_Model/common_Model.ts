@@ -36,6 +36,8 @@ export class Booking {
   @prop({ required: true, default: 1, })
   duration !: number
 
+  @prop({ default: "CONFIRMED" })
+  status !: string;
 
   @prop({ type: () => [mongoose.Types.ObjectId], ref: () => Payment })
   Payment !: Ref<Payment>[]

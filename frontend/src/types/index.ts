@@ -56,7 +56,7 @@ export interface User {
 
 export interface Room {
   _id: string;
-  property: string;
+  property: string | Property;
   roomName: string;
   title: string;
   roomNo: string;
@@ -68,6 +68,8 @@ export interface Room {
   mapLocation: string;
   isAvalabile: boolean;
   Booking?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Property {
@@ -86,32 +88,40 @@ export interface Property {
   wallet: number;
   rooms?: string[] | Room[];
   BankDetails?: {
-    accountNumber?: string;
+    accountNumber?: string | number;
     ifscCode?: string;
     bankName?: string;
+    accountHolderName?: string;
+    AccountHoldername?: string;
   };
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Booking {
   _id: string;
-  user: string;
-  room: string;
+  user: string | User;
+  room: string | Room;
   startDate: string;
   endDate: string;
   price: number;
   duration: number;
+  status?: string;
   Payment?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface MerchantPayment {
   _id: string;
-  userId: string;
-  room: string;
-  property: string;
+  userId: string | User;
+  room: string | Room;
+  property: string | Property;
   amount: number;
   payableAmount: number;
   paymentDate: string;
   status: PaymentStatus;
+  createdAt?: string;
 }
 
 export interface AppNotification {
@@ -124,9 +134,9 @@ export interface AppNotification {
 
 export interface Commission {
   _id: string;
-  user: string;
-  property: string;
-  room: string;
+  user: string | User;
+  property: string | Property;
+  room: string | Room;
   commission: string;
   amount: number;
   createdAt?: string;

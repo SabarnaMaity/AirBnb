@@ -261,7 +261,7 @@ export const handleLogin = async (req: Request, res: Response) => {
 
 export const getAllWithdraws = async (req: Request, res: Response) => {
     try {
-        const withdraws = await WithdawModel.find({}).populate("user");
+        const withdraws = await WithdawModel.find({}).populate("user").sort({ createdAt: -1 });
         return ApiResponse.success(res, "Withdraws fetched successfully", withdraws);
     } catch (error: any) {
         return ApiResponse.error(res, "Failed to fetch withdraws", 500, error.message);
@@ -270,7 +270,7 @@ export const getAllWithdraws = async (req: Request, res: Response) => {
 
 export const getAllCommissions = async (req: Request, res: Response) => {
     try {
-        const commissions = await CommissionModel.find({}).populate("user").populate("property").populate("room");
+        const commissions = await CommissionModel.find({}).populate("user").populate("property").populate("room").sort({ createdAt: -1 });
         return ApiResponse.success(res, "Commissions fetched successfully", commissions);
     } catch (error: any) {
         return ApiResponse.error(res, "Failed to fetch commissions", 500, error.message);

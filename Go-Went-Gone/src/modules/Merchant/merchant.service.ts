@@ -9,11 +9,47 @@ export class propertyServics extends BaseService<Property> {
     constructor() {
         super(PropertyModel)
     }
+
+    async getAll() {
+        try {
+            const data = await this.model.find({}).populate("owner").populate("rooms").sort({ createdAt: -1 });
+            return data;
+        } catch (error: any) {
+            console.log(error);
+            return error;
+        }
+    }
 }
 
 export class roomServics extends BaseService<Room> {
     constructor() {
         super(RoomModel)
+    }
+
+    async getAll() {
+        try {
+            const data = await this.model.find({}).populate("property").sort({ createdAt: -1 });
+            return data;
+        } catch (error: any) {
+            console.log(error);
+            return error;
+        }
+    }
+
+    async deletedById(id: any) {
+        try {
+            const room = await this.model.findById(id);
+            if (room && room.property) {
+                await PropertyModel.findByIdAndUpdate(room.property, {
+                    $pull: { rooms: id }
+                });
+            }
+            const res = await this.model.findByIdAndDelete(id);
+            return res;
+        } catch (error: any) {
+            console.log(error);
+            return error;
+        }
     }
 
     async handleCreateRoom(data: Partial<Room>) {
