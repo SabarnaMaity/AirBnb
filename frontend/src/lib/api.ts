@@ -142,6 +142,16 @@ export const api = {
   // Merchant APIs
   createProperty: (data: any) =>
     request("/api/merchant", { method: "POST", body: JSON.stringify(data) }),
+  merchantWithdraw: (data: {
+    propertyId: string;
+    amount: number;
+    userId?: string;
+    bankDetails?: any;
+  }) =>
+    request<any>("/api/merchant/withdraw", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
   getAllProperties: () =>
     request<any[]>("/api/merchant/getall", { method: "GET" }),
   getPropertyById: (id: string) =>

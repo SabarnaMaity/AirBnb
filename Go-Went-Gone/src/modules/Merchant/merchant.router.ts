@@ -1,5 +1,5 @@
 import {Router} from "express"
-import { createProperty, propertyCotroller, roomController, } from "./merchant.controller";
+import { createProperty, handleMerchantWithdraw, propertyCotroller, roomController, } from "./merchant.controller";
 const router = Router();
 
 const PropertyController = new propertyCotroller();
@@ -7,6 +7,7 @@ const RoomController = new roomController();
 
 
 router.post("/",createProperty);
+router.post("/withdraw", handleMerchantWithdraw);
 router.put("/update/:_id",PropertyController.handelUpdate);
 router.get("/getall",PropertyController.handelGetAll);
 router.delete("/delete",PropertyController.handelDelete);
