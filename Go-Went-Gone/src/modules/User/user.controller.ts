@@ -1,10 +1,11 @@
 import { Request, Response } from "express";
 import { BaseController } from "../../Base/Base_Class/Base.controller";
 import { ApiResponse } from "../../Base/Base_Class/response";
-import { Booking, CommissionModel, LikeList, Notification, WithdawModel } from "../../Base/Base_Model/common_Model";
+import { Booking, BookingModel, CommissionModel, LikeList, Notification, WithdawModel } from "../../Base/Base_Model/common_Model";
 import { addWallet, User, UserModel } from "./user.model";
 import { addMoneyService, bookingService, checkOutService, LikeService, notificationService, UserServics } from "./user.service";
 import { MerchantPayment, MerchantPaymentModel } from "../Merchant/merchant.model";
+import { RoomModel } from "../Merchant/room.model";
 import { PaymentStatus } from "../../Base/Base_Class/baseEnum";
 
 export class userController extends BaseController<User> {
@@ -162,21 +163,47 @@ export class addMoneyController extends BaseController<addWallet> {
 export const refund = async (req: Request, res: Response) => {
     try {
         const { _id } = req.query;
-        const paymentData = await MerchantPaymentModel.findById(_id);
-        if (paymentData?.status === PaymentStatus.RECIVED) {
-            paymentData.status = PaymentStatus.REFUND;
-            await paymentData?.save();
-            await UserModel.findByIdAndUpdate(paymentData.userId, { $inc: { wallet: paymentData.amount } }, { new: true });
-            ApiResponse.success(res, "Payment Refunded")
+        let paymentData = await MerchantPaymentModel.findById(_id);
+        let booking: any = null;
+        if (!paymentData) {
+            // Check if _id is a Booking ID
+            booking = await BookingModel.findById(_id);
+            if (booking) {
+                paymentData = await MerchantPaymentModel.findOne({
+                    userId: booking.user,
+                    room: booking.room,
+                    status: PaymentStatus.RECIVED,
+                });
+            }
         }
-        else {
-            paymentData?.status === PaymentStatus.SEND ? ApiResponse.error(res, `Payment Already send into Merchant Account`) :
-                ApiResponse.error(res, "Payment Already Refunded ")
+        if (!paymentData) {
+            paymentData = await MerchantPaymentModel.findOne({
+                $or: [{ room: _id }, { userId: _id }],
+                status: PaymentStatus.RECIVED,
+            });
+        }
+
+        if (paymentData && paymentData.status === PaymentStatus.RECIVED) {
+            paymentData.status = PaymentStatus.REFUND;
+            await paymentData.save();
+            await UserModel.findByIdAndUpdate(paymentData.userId, { $inc: { wallet: paymentData.amount } }, { new: true });
+            await RoomModel.findByIdAndUpdate(paymentData.room, { isAvalabile: true });
+            if (booking) {
+                await BookingModel.findByIdAndDelete(booking._id);
+            } else {
+                await BookingModel.deleteMany({ user: paymentData.userId, room: paymentData.room });
+            }
+            ApiResponse.success(res, "Payment Refunded to wallet successfully!");
+        } else {
+            paymentData?.status === PaymentStatus.SEND
+                ? ApiResponse.error(res, "Payment already settled into Host account")
+                : ApiResponse.error(res, "Payment already refunded or record not found");
         }
     } catch (error: any) {
-        ApiResponse.error(res, error)
+        console.error("Refund error:", error);
+        ApiResponse.error(res, error.message || "Refund failed");
     }
-}
+};
 
  export const createWithdraw = async(req: Request, res: Response)=>{
     try {

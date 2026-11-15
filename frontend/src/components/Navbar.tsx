@@ -156,17 +156,20 @@ export default function Navbar() {
         >
           Trips & Bookings
         </Link>
-        <Link
-          href="/merchant"
-          style={{
-            fontSize: 14,
-            fontWeight: pathname === "/merchant" ? 700 : 500,
-            color: pathname === "/merchant" ? "#ff385c" : "#475569",
-            transition: "color 0.2s",
-          }}
-        >
-          Become a Host
-        </Link>
+        {/* Role-based Center Links */}
+        {user?.role === USERROLE.MERCHANT && (
+          <Link
+            href="/merchant"
+            style={{
+              fontSize: 14,
+              fontWeight: pathname === "/merchant" ? 700 : 500,
+              color: pathname === "/merchant" ? "#2563eb" : "#475569",
+              transition: "color 0.2s",
+            }}
+          >
+            Host Dashboard
+          </Link>
+        )}
         {user?.role === USERROLE.ADMIN && (
           <Link
             href="/admin"
@@ -184,9 +187,11 @@ export default function Navbar() {
 
       {/* Right User Actions */}
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Link href="/merchant" style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>
-          Switch to Hosting
-        </Link>
+        {!user && (
+          <Link href="/merchant" style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>
+            Become a Host
+          </Link>
+        )}
 
         {user ? (
           <Space orientation="horizontal" size={10}>

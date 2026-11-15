@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Room, AppNotification, PaymentStatus } from "@/types";
+import { Room, AppNotification, USERROLE } from "@/types";
 import { api } from "@/lib/api";
 import {
   Card,
@@ -18,9 +18,7 @@ import {
   Input,
   InputNumber,
   Select,
-  Table,
   Badge,
-  Statistic,
   message,
   Divider,
   Drawer,
@@ -29,6 +27,10 @@ import {
   Spin,
   Alert,
   Empty,
+  Tabs,
+  Popconfirm,
+  Form,
+  Descriptions,
 } from "antd";
 import {
   WalletOutlined,
@@ -41,6 +43,14 @@ import {
   EnvironmentOutlined,
   LoginOutlined,
   ReloadOutlined,
+  CalendarOutlined,
+  CheckCircleFilled,
+  UserOutlined,
+  HomeOutlined,
+  InfoCircleOutlined,
+  ClockCircleOutlined,
+  PhoneOutlined,
+  MailOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
@@ -54,19 +64,57 @@ export default function UserPanel() {
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [bookings, setBookings] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<string>("trips");
 
   // Modals
   const [isAddMoneyOpen, setIsAddMoneyOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [bookingRoom, setBookingRoom] = useState<Room | null>(null);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<{
+    booking: any;
+    room: Room | null;
+  } | null>(null);
 
   // Form states
   const [addAmount, setAddAmount] = useState<number>(1000);
   const [addMethod, setAddMethod] = useState("UPI / GPay");
   const [withdrawAmount, setWithdrawAmount] = useState<number>(500);
   const [bookDuration, setBookDuration] = useState<number>(2);
-  const [bookDate, setBookDate] = useState<string>("2026-12-01");
+  const [bookDate, setBookDate] = useState<string>(
+    new Date(Date.now() + 86400000).toISOString().split("T")[0] || "2026-12-01"
+  );
+
+  // Profile update form
+  const [profileForm, setProfileForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    emergencyContact: "",
+    addressLine: "",
+    city: "",
+    state: "",
+    postalCode: "",
+    country: "India",
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Sync user profile state
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        firstName: user.name?.firstName || (user.name as any)?.first || "",
+        lastName: user.name?.lastName || (user.name as any)?.last || "",
+        phone: user.contactInfo?.phone || "",
+        emergencyContact: user.contactInfo?.emergencyContact || "",
+        addressLine: (user.address as any)?.addressLine || (user.address as any)?.street || "",
+        city: user.address?.city || "",
+        state: user.address?.state || "",
+        postalCode: (user.address as any)?.postalCode || (user.address as any)?.zipCode || "",
+        country: user.address?.country || "India",
+      });
+    }
+  }, [user]);
 
   // Fetch real data from backend
   const fetchData = async () => {
@@ -80,7 +128,6 @@ export default function UserPanel() {
 
       // 2. Fetch User-specific data if logged in
       if (user?._id) {
-        // Refresh wallet
         await refreshUser();
 
         // Fetch likes
@@ -98,7 +145,6 @@ export default function UserPanel() {
         // Fetch bookings
         const bookingsRes = await api.getAllBookings();
         if (bookingsRes.success && Array.isArray(bookingsRes.data)) {
-          // Filter current user's bookings
           const userBookings = bookingsRes.data.filter(
             (b: any) => b.user === user._id || b.user?._id === user._id
           );
@@ -106,7 +152,7 @@ export default function UserPanel() {
         }
       }
     } catch (err: any) {
-      console.error("Failed to fetch backend data", err);
+      console.error("Failed to fetch user data", err);
     } finally {
       setLoading(false);
     }
@@ -119,31 +165,32 @@ export default function UserPanel() {
   // If user is not logged in, prompt login
   if (!user) {
     return (
-      <div style={{ textAlign: "center", padding: "60px 20px" }}>
+      <div style={{ textAlign: "center", padding: "80px 20px" }}>
         <Card
           style={{
             maxWidth: 480,
             margin: "0 auto",
-            borderRadius: 16,
-            boxShadow: "0 4px 16px rgba(0, 0, 0, 0.04)",
+            borderRadius: 20,
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.05)",
+            border: "1px solid #e2e8f0",
           }}
         >
           <Space direction="vertical" size={16} align="center">
-            <Avatar size={64} icon={<WalletOutlined />} style={{ background: "#ff385c" }} />
-            <Title level={3} style={{ margin: 0 }}>
-              User Sign-In Required
+            <Avatar size={64} icon={<UserOutlined />} style={{ background: "#ff385c" }} />
+            <Title level={3} style={{ margin: 0, fontWeight: 700 }}>
+              Sign In to View Trips & Account
             </Title>
-            <Paragraph type="secondary">
-              Please sign in to your guest account to browse available rooms, manage your digital wallet, and book verified stays.
+            <Paragraph type="secondary" style={{ maxWidth: 360 }}>
+              Please sign in to view your reservation details, check your digital wallet balance, and manage your account.
             </Paragraph>
             <Link href="/login">
               <Button
                 type="primary"
                 size="large"
                 icon={<LoginOutlined />}
-                style={{ backgroundColor: "#ff385c", borderColor: "#ff385c", borderRadius: 10 }}
+                style={{ backgroundColor: "#ff385c", borderColor: "#ff385c", borderRadius: 10, fontWeight: 700 }}
               >
-                Go to Sign In
+                Sign In
               </Button>
             </Link>
           </Space>
@@ -155,7 +202,7 @@ export default function UserPanel() {
   // Add Money Handler
   const handleAddMoney = async () => {
     if (!addAmount || addAmount <= 0) {
-      message.error("Please enter a valid amount");
+      message.error("Please enter a valid deposit amount");
       return;
     }
 
@@ -167,7 +214,7 @@ export default function UserPanel() {
     });
 
     if (res.success) {
-      message.success(`Successfully added ₹${addAmount} to your wallet!`);
+      message.success(`₹${addAmount} successfully added to your wallet!`);
       await refreshUser();
       setIsAddMoneyOpen(false);
     } else {
@@ -178,7 +225,7 @@ export default function UserPanel() {
   // Withdraw Handler
   const handleWithdraw = async () => {
     if (!withdrawAmount || withdrawAmount <= 0) {
-      message.error("Please enter a valid amount");
+      message.error("Please enter a valid withdrawal amount");
       return;
     }
     if (withdrawAmount > (user.wallet || 0)) {
@@ -220,7 +267,7 @@ export default function UserPanel() {
 
     if ((user.wallet || 0) < totalPrice) {
       message.error(
-        `Insufficient balance! Required: ₹${totalPrice}, Available: ₹${user.wallet || 0}`
+        `Insufficient wallet balance! Required: ₹${totalPrice}, Available: ₹${user.wallet || 0}`
       );
       return;
     }
@@ -233,127 +280,155 @@ export default function UserPanel() {
     });
 
     if (res.success) {
-      message.success(
-        `Booking confirmed for ${bookingRoom.roomName}! ₹${totalPrice} debited from wallet.`
-      );
+      message.success(`Booking confirmed for ${bookingRoom.roomName}!`);
       setBookingRoom(null);
+      await refreshUser();
       await fetchData();
+      setActiveTab("trips");
     } else {
       message.error(res.message || "Booking failed");
     }
   };
 
   // Refund Handler
-  const handleRefund = async (paymentId: string) => {
-    const res = await api.refundPayment(paymentId);
-    if (res.success) {
-      message.success("Payment refunded to your wallet successfully!");
-      await fetchData();
-    } else {
-      message.error(res.message || "Refund failed");
+  const handleRefund = async (bookingId: string) => {
+    try {
+      const res = await api.refundPayment(bookingId);
+      if (res.success) {
+        message.success("100% Instant Refund credited back to your digital wallet!");
+        if (selectedBookingDetail?.booking?._id === bookingId) {
+          setSelectedBookingDetail(null);
+        }
+        await refreshUser();
+        await fetchData();
+      } else {
+        message.error(res.message || "Refund failed");
+      }
+    } catch (err: any) {
+      message.error("Failed to process cancellation refund");
+    }
+  };
+
+  // Save profile updates
+  const handleSaveProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      const res = await api.updateUser(user._id, {
+        name: {
+          firstName: profileForm.firstName,
+          lastName: profileForm.lastName,
+          first: profileForm.firstName,
+          last: profileForm.lastName,
+        },
+        contactInfo: {
+          phone: profileForm.phone,
+          emergencyContact: profileForm.emergencyContact,
+          email: user.email,
+        },
+        address: {
+          addressLine: profileForm.addressLine,
+          city: profileForm.city,
+          state: profileForm.state,
+          postalCode: profileForm.postalCode,
+          country: profileForm.country,
+        },
+      });
+
+      if (res.success) {
+        message.success("Profile information updated successfully!");
+        await refreshUser();
+      } else {
+        message.error(res.message || "Failed to update profile");
+      }
+    } catch (err: any) {
+      message.error("Failed to save changes");
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-
-  // Bookings Columns
-  const bookingColumns = [
-    {
-      title: "Booking ID",
-      dataIndex: "_id",
-      key: "_id",
-      render: (id: string) => <Text code style={{ fontSize: 11 }}>{id?.substring(0, 10)}...</Text>,
-    },
-    {
-      title: "Room",
-      dataIndex: "room",
-      key: "room",
-      render: (r: any) => (
-        <Text strong>{typeof r === "object" ? r.roomName || r.title : r || "Room Stay"}</Text>
-      ),
-    },
-    {
-      title: "Duration",
-      dataIndex: "duration",
-      key: "duration",
-      render: (d: number) => `${d} Night${d > 1 ? "s" : ""}`,
-    },
-    {
-      title: "Total Paid",
-      dataIndex: "price",
-      key: "price",
-      render: (val: number) => (
-        <Text strong style={{ color: "#0f172a" }}>
-          ₹{val?.toLocaleString()}
-        </Text>
-      ),
-    },
-    {
-      title: "Payment Action",
-      key: "action",
-      render: (_: any, record: any) => {
-        const paymentId = Array.isArray(record.Payment) && record.Payment.length > 0 ? record.Payment[0] : record.payment;
-        return (
-          <Button
-            size="small"
-            danger
-            icon={<RollbackOutlined />}
-            onClick={() => handleRefund(paymentId || record._id)}
-          >
-            Refund
-          </Button>
-        );
-      },
-    },
-  ];
+  const likedRoomObjects = rooms.filter((r) => wishlist.includes(r._id));
+  const guestCode = user._id ? user._id.slice(-6).toUpperCase() : "GUEST";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      {/* Top Profile & Digital Wallet Card */}
+    <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 1200, margin: "0 auto", width: "100%" }}>
+      {/* 1. Sleek Modern User Profile & Wallet Card */}
       <Card
         style={{
-          borderRadius: 16,
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)",
+          borderRadius: 20,
+          boxShadow: "0 2px 14px rgba(0, 0, 0, 0.04)",
           border: "1px solid #e2e8f0",
+          background: "#ffffff",
         }}
-        styles={{ body: { padding: "20px 24px" } }}
+        styles={{ body: { padding: "26px 30px" } }}
       >
-        <Row justify="space-between" align="middle" gutter={[16, 16]}>
-          <Col xs={24} md={12}>
-            <Space orientation="horizontal" size={16} align="center">
+        <Row justify="space-between" align="middle" gutter={[20, 20]}>
+          <Col xs={24} md={13}>
+            <Space orientation="horizontal" size={18} align="center">
               <Avatar
-                size={54}
+                size={64}
                 style={{
                   background: "linear-gradient(135deg, #ff385c, #e11d48)",
-                  fontSize: 22,
-                  fontWeight: 700,
+                  fontSize: 24,
+                  fontWeight: 800,
+                  boxShadow: "0 4px 14px rgba(255, 56, 92, 0.3)",
                 }}
               >
-                {user.name?.firstName?.[0] || "U"}
+                {user.name?.firstName?.[0] || (user.name as any)?.first?.[0] || "U"}
               </Avatar>
               <div>
-                <Space size={8}>
-                  <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-                    {user.name?.firstName} {user.name?.lastName}
+                <Space size={8} wrap align="center">
+                  <Title level={3} style={{ margin: 0, fontWeight: 800, color: "#0f172a" }}>
+                    {user.name?.firstName || (user.name as any)?.first} {user.name?.lastName || (user.name as any)?.last}
                   </Title>
-                  <Tag color="magenta" style={{ fontWeight: 600 }}>
-                    GUEST ACCOUNT
+                  <Tag
+                    icon={<CheckCircleFilled />}
+                    color="success"
+                    style={{ fontWeight: 600, borderRadius: 12, padding: "2px 10px" }}
+                  >
+                    Verified Traveler
+                  </Tag>
+                  <Tag color="default" style={{ fontWeight: 600, borderRadius: 12 }}>
+                    ID: #{guestCode}
                   </Tag>
                 </Space>
-                <Text type="secondary" style={{ fontSize: 12, display: "block", marginTop: 2 }}>
-                  {user.email} • ID: {user._id}
-                </Text>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 16,
+                    marginTop: 6,
+                    flexWrap: "wrap",
+                    fontSize: 13,
+                    color: "#64748b",
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <MailOutlined /> {user.email}
+                  </span>
+                  {profileForm.phone && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <PhoneOutlined /> {profileForm.phone}
+                    </span>
+                  )}
+                  {profileForm.city && (
+                    <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <EnvironmentOutlined /> {profileForm.city}, {profileForm.state || "India"}
+                    </span>
+                  )}
+                  <span>• <strong>{bookings.length}</strong> Trip{bookings.length !== 1 ? "s" : ""} Booked</span>
+                </div>
               </div>
             </Space>
           </Col>
 
-          <Col xs={24} md={12}>
+          <Col xs={24} md={11}>
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "flex-end",
-                gap: 16,
+                gap: 14,
                 flexWrap: "wrap",
               }}
             >
@@ -361,20 +436,17 @@ export default function UserPanel() {
                 style={{
                   background: "#f8fafc",
                   border: "1px solid #e2e8f0",
-                  padding: "8px 16px",
-                  borderRadius: 12,
+                  padding: "10px 20px",
+                  borderRadius: 14,
+                  textAlign: "right",
                 }}
               >
-                <Statistic
-                  title={
-                    <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b" }}>
-                      DIGITAL WALLET BALANCE
-                    </span>
-                  }
-                  value={user.wallet || 0}
-                  prefix="₹"
-                  valueStyle={{ color: "#059669", fontWeight: 800, fontSize: 22 }}
-                />
+                <Text style={{ fontSize: 11, fontWeight: 700, color: "#64748b", display: "block" }}>
+                  DIGITAL WALLET BALANCE
+                </Text>
+                <Text strong style={{ color: "#059669", fontSize: 24, letterSpacing: "-0.5px" }}>
+                  ₹{(user.wallet || 0).toLocaleString()}
+                </Text>
               </div>
 
               <Space orientation="horizontal" size={8}>
@@ -385,8 +457,9 @@ export default function UserPanel() {
                   style={{
                     backgroundColor: "#ff385c",
                     borderColor: "#ff385c",
-                    fontWeight: 600,
-                    height: 38,
+                    fontWeight: 700,
+                    height: 42,
+                    borderRadius: 10,
                   }}
                 >
                   Deposit
@@ -395,7 +468,7 @@ export default function UserPanel() {
                 <Button
                   icon={<ArrowDownOutlined />}
                   onClick={() => setIsWithdrawOpen(true)}
-                  style={{ fontWeight: 600, height: 38 }}
+                  style={{ fontWeight: 600, height: 42, borderRadius: 10 }}
                 >
                   Withdraw
                 </Button>
@@ -404,14 +477,14 @@ export default function UserPanel() {
                   <Button
                     icon={<BellOutlined />}
                     onClick={() => setIsNotificationOpen(true)}
-                    style={{ height: 38 }}
+                    style={{ height: 42, borderRadius: 10 }}
                   />
                 </Badge>
 
                 <Button
                   icon={<ReloadOutlined />}
                   onClick={fetchData}
-                  style={{ height: 38 }}
+                  style={{ height: 42, borderRadius: 10 }}
                 />
               </Space>
             </div>
@@ -419,259 +492,779 @@ export default function UserPanel() {
         </Row>
       </Card>
 
-      {/* Available Stays Catalog (Live from Backend) */}
-      <div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-end",
-            marginBottom: 16,
-          }}
-        >
-          <div>
-            <Title level={3} style={{ margin: 0, fontWeight: 800 }}>
-              Available Stays & Rooms
-            </Title>
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              Live catalog synced with MongoDB (API: `/api/merchant/room/getall`)
-            </Text>
-          </div>
-          <Text type="secondary" style={{ fontSize: 13, fontWeight: 500 }}>
-            {rooms.length} Stays Available
-          </Text>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign: "center", padding: "40px 0" }}>
-            <Spin size="large" tip="Loading rooms from backend..." />
-          </div>
-        ) : rooms.length === 0 ? (
-          <Card style={{ borderRadius: 16, textAlign: "center", padding: 32 }}>
-            <Empty description="No rooms currently listed in MongoDB. Hosts can create rooms via Merchant Panel!" />
-          </Card>
-        ) : (
-          <Row gutter={[20, 20]}>
-            {rooms.map((room) => {
-              const isLiked = wishlist.includes(room._id);
-              const roomImg =
-                room.images?.[0] ||
-                "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80";
-
-              return (
-                <Col xs={24} sm={12} lg={8} key={room._id}>
-                  <Card
-                    hoverable
-                    style={{
-                      borderRadius: 16,
-                      overflow: "hidden",
-                      border: "1px solid #e2e8f0",
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                    styles={{
-                      body: {
-                        display: "flex",
-                        flexDirection: "column",
-                        justifyContent: "space-between",
-                        flex: 1,
-                        padding: 16,
-                      },
-                    }}
-                    cover={
-                      <div style={{ position: "relative", height: 210, overflow: "hidden" }}>
-                        <img
-                          alt={room.roomName}
-                          src={roomImg}
-                          style={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                        <Tag
-                          color="rgba(0, 0, 0, 0.65)"
-                          style={{
-                            position: "absolute",
-                            top: 12,
-                            left: 12,
-                            color: "#fff",
-                            fontWeight: 600,
-                            borderRadius: 6,
-                            border: "none",
-                          }}
-                        >
-                          Room {room.roomNo}
-                        </Tag>
-
-                        <Button
-                          type="text"
-                          shape="circle"
-                          icon={
-                            isLiked ? (
-                              <HeartFilled style={{ color: "#ff385c", fontSize: 18 }} />
-                            ) : (
-                              <HeartOutlined style={{ color: "#ffffff", fontSize: 18 }} />
-                            )
-                          }
-                          onClick={() => toggleLike(room._id)}
-                          style={{
-                            position: "absolute",
-                            top: 10,
-                            right: 10,
-                            background: "rgba(0,0,0,0.3)",
-                            backdropFilter: "blur(4px)",
-                          }}
-                        />
-
-                        <Tag
-                          color={room.isAvalabile ? "success" : "error"}
-                          style={{
-                            position: "absolute",
-                            bottom: 10,
-                            left: 12,
-                            fontWeight: 700,
-                            borderRadius: 6,
-                          }}
-                        >
-                          {room.isAvalabile ? "Available" : "Booked"}
-                        </Tag>
-                      </div>
-                    }
-                  >
-                    <div>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 700,
-                          textTransform: "uppercase",
-                          color: "#ff385c",
-                          letterSpacing: "0.5px",
-                        }}
-                      >
-                        {room.tag}
-                      </Text>
-                      <Title
-                        level={5}
-                        style={{ margin: "2px 0 6px", fontWeight: 700 }}
-                        ellipsis
-                      >
-                        {room.roomName}
-                      </Title>
-                      <Paragraph
-                        type="secondary"
-                        style={{ fontSize: 12, marginBottom: 12 }}
-                        ellipsis={{ rows: 2 }}
-                      >
-                        {room.description}
-                      </Paragraph>
-
-                      {room.services && (
-                        <Space
-                          orientation="horizontal"
-                          size={[4, 4]}
-                          wrap
-                          style={{ marginBottom: 12 }}
-                        >
-                          {room.services.map((srv, idx) => (
-                            <Tag key={idx} style={{ fontSize: 10, textTransform: "uppercase" }}>
-                              {srv}
-                            </Tag>
-                          ))}
-                        </Space>
-                      )}
-
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: 12,
-                          color: "#64748b",
-                        }}
-                      >
-                        <EnvironmentOutlined />
-                        <span>Geo: {room.mapLocation}</span>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 16,
-                        paddingTop: 12,
-                        borderTop: "1px solid #f1f5f9",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                      }}
+      {/* 2. Organized Dashboard Tabs */}
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        size="large"
+        items={[
+          {
+            key: "trips",
+            label: (
+              <span style={{ fontWeight: 700, fontSize: 15 }}>
+                🧳 My Bookings ({bookings.length})
+              </span>
+            ),
+            children: (
+              <div style={{ marginTop: 8 }}>
+                {loading ? (
+                  <div style={{ textAlign: "center", padding: "60px 0" }}>
+                    <Spin size="large" tip="Loading your booked stays..." />
+                  </div>
+                ) : bookings.length === 0 ? (
+                  <Card style={{ borderRadius: 20, textAlign: "center", padding: 48, border: "1px solid #e2e8f0" }}>
+                    <Empty
+                      description={
+                        <div style={{ maxWidth: 440, margin: "0 auto" }}>
+                          <Title level={4} style={{ margin: "8px 0 4px", fontWeight: 700 }}>
+                            No upcoming trips booked yet
+                          </Title>
+                          <Text type="secondary">
+                            Ready to pack your bags? Explore our handpicked rooms, suites, and vacation retreats.
+                          </Text>
+                        </div>
+                      }
                     >
-                      <div>
-                        <Text type="secondary" style={{ fontSize: 11 }}>
-                          Per Night
-                        </Text>
-                        <Title level={4} style={{ margin: 0, fontWeight: 800 }}>
-                          ₹{room.price}
-                        </Title>
-                      </div>
-
                       <Button
                         type="primary"
-                        disabled={!room.isAvalabile}
-                        onClick={() => setBookingRoom(room)}
+                        onClick={() => setActiveTab("explore")}
                         style={{
-                          backgroundColor: room.isAvalabile ? "#ff385c" : undefined,
-                          borderColor: room.isAvalabile ? "#ff385c" : undefined,
-                          fontWeight: 600,
+                          backgroundColor: "#ff385c",
+                          borderColor: "#ff385c",
+                          borderRadius: 10,
+                          fontWeight: 700,
+                          marginTop: 16,
+                          height: 42,
+                          padding: "0 28px",
                         }}
                       >
-                        {room.isAvalabile ? "Book Now" : "Reserved"}
+                        Explore Available Stays
                       </Button>
-                    </div>
+                    </Empty>
                   </Card>
-                </Col>
-              );
-            })}
-          </Row>
-        )}
-      </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {bookings.map((booking) => {
+                      const roomId = typeof booking.room === "object" ? booking.room?._id : booking.room;
+                      const matchedRoom =
+                        rooms.find((r) => r._id === roomId) ||
+                        (typeof booking.room === "object" ? booking.room : null);
 
-      {/* Bookings & Refund History Table */}
-      <Card
-        title={
-          <div>
-            <Title level={4} style={{ margin: 0, fontWeight: 700 }}>
-              My Bookings & Reservations
-            </Title>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Live reservation records from MongoDB (API: `/api/user/booking/getall`)
-            </Text>
-          </div>
-        }
-        style={{
-          borderRadius: 16,
-          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)",
-          border: "1px solid #e2e8f0",
-        }}
-      >
-        <Table
-          dataSource={bookings.map((b) => ({ ...b, key: b._id }))}
-          columns={bookingColumns}
-          pagination={false}
-          locale={{ emptyText: "No reservations found in database yet." }}
-        />
-      </Card>
+                      const roomName = matchedRoom?.roomName || "Deluxe Vacation Suite";
+                      const roomLocation = matchedRoom?.mapLocation || "Darjeeling, India";
+                      const roomPhoto =
+                        matchedRoom?.images?.[0] ||
+                        "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80";
 
-      {/* Modal: Add Money */}
+                      const checkInDate = booking.startDate ? new Date(booking.startDate) : new Date();
+                      const checkOutDate = new Date(checkInDate);
+                      checkOutDate.setDate(checkOutDate.getDate() + (booking.duration || 1));
+
+                      const checkInFormatted = checkInDate.toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      });
+                      const checkOutFormatted = checkOutDate.toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      });
+
+                      const tripCode = booking._id ? booking._id.slice(-6).toUpperCase() : "TRIP";
+
+                      return (
+                        <Card
+                          key={booking._id}
+                          hoverable
+                          style={{
+                            borderRadius: 18,
+                            border: "1px solid #e2e8f0",
+                            overflow: "hidden",
+                            boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)",
+                            transition: "all 0.2s ease",
+                          }}
+                          styles={{ body: { padding: 20 } }}
+                        >
+                          <Row gutter={[20, 20]} align="middle">
+                            {/* Room Image */}
+                            <Col xs={24} sm={8} md={6}>
+                              <div
+                                style={{
+                                  height: 145,
+                                  borderRadius: 12,
+                                  overflow: "hidden",
+                                  position: "relative",
+                                  background: "#f1f5f9",
+                                }}
+                              >
+                                <img
+                                  src={roomPhoto}
+                                  alt={roomName}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                />
+                                {matchedRoom?.roomNo && (
+                                  <Tag
+                                    color="rgba(0,0,0,0.75)"
+                                    style={{
+                                      position: "absolute",
+                                      top: 8,
+                                      left: 8,
+                                      color: "#fff",
+                                      border: "none",
+                                      fontWeight: 700,
+                                      borderRadius: 6,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    Room #{matchedRoom.roomNo}
+                                  </Tag>
+                                )}
+                              </div>
+                            </Col>
+
+                            {/* Booking Details */}
+                            <Col xs={24} sm={10} md={12}>
+                              <Space orientation="vertical" size={4} style={{ width: "100%" }}>
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                  <Tag color="success" style={{ fontWeight: 700, borderRadius: 6 }}>
+                                    CONFIRMED
+                                  </Tag>
+                                  <Tag color="blue" style={{ fontWeight: 600, borderRadius: 6 }}>
+                                    Ref: #{tripCode}
+                                  </Tag>
+                                  {matchedRoom?.tag && (
+                                    <Tag color="purple" style={{ fontWeight: 600, borderRadius: 6 }}>
+                                      {matchedRoom.tag}
+                                    </Tag>
+                                  )}
+                                </div>
+
+                                <Title level={4} style={{ margin: "6px 0 2px", fontWeight: 700 }}>
+                                  {roomName}
+                                </Title>
+
+                                <Text
+                                  type="secondary"
+                                  style={{
+                                    fontSize: 13,
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                  }}
+                                >
+                                  <EnvironmentOutlined /> {roomLocation}
+                                </Text>
+
+                                <div
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 12,
+                                    marginTop: 10,
+                                    background: "#f8fafc",
+                                    padding: "6px 12px",
+                                    borderRadius: 8,
+                                    border: "1px solid #e2e8f0",
+                                    fontSize: 12,
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <span style={{ color: "#334155", fontWeight: 600 }}>
+                                    📅 {checkInFormatted} ➔ {checkOutFormatted}
+                                  </span>
+                                  <span style={{ color: "#64748b" }}>
+                                    ({booking.duration} Night{booking.duration > 1 ? "s" : ""})
+                                  </span>
+                                </div>
+                              </Space>
+                            </Col>
+
+                            {/* Price & Actions */}
+                            <Col xs={24} sm={6} md={6}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  alignItems: "flex-end",
+                                  gap: 12,
+                                }}
+                              >
+                                <div style={{ textAlign: "right" }}>
+                                  <Text
+                                    type="secondary"
+                                    style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}
+                                  >
+                                    Total Paid
+                                  </Text>
+                                  <Text strong style={{ fontSize: 24, color: "#0f172a", display: "block" }}>
+                                    ₹{booking.price?.toLocaleString()}
+                                  </Text>
+                                  <Tag color="cyan" style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, marginTop: 2 }}>
+                                    Paid via Wallet
+                                  </Tag>
+                                </div>
+
+                                <Space size={8}>
+                                  <Button
+                                    size="small"
+                                    icon={<InfoCircleOutlined />}
+                                    onClick={() => setSelectedBookingDetail({ booking, room: matchedRoom })}
+                                    style={{ borderRadius: 8, fontWeight: 600 }}
+                                  >
+                                    Details
+                                  </Button>
+
+                                  <Popconfirm
+                                    title="Cancel this reservation?"
+                                    description="100% instant refund will be credited directly to your digital wallet."
+                                    onConfirm={() => handleRefund(booking._id)}
+                                    okText="Yes, Cancel & Refund"
+                                    cancelText="Keep Stay"
+                                    okButtonProps={{ danger: true }}
+                                  >
+                                    <Button
+                                      size="small"
+                                      danger
+                                      icon={<RollbackOutlined />}
+                                      style={{ borderRadius: 8, fontWeight: 600 }}
+                                    >
+                                      Cancel & Refund
+                                    </Button>
+                                  </Popconfirm>
+                                </Space>
+                              </div>
+                            </Col>
+                          </Row>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "profile",
+            label: <span style={{ fontWeight: 700, fontSize: 15 }}>👤 My Profile & Account</span>,
+            children: (
+              <div style={{ marginTop: 8 }}>
+                <Row gutter={[24, 24]}>
+                  {/* Personal Information */}
+                  <Col xs={24} lg={14}>
+                    <Card
+                      style={{ borderRadius: 18, border: "1px solid #e2e8f0" }}
+                      title={<span style={{ fontWeight: 700 }}>Personal Information</span>}
+                    >
+                      <Form layout="vertical" onFinish={handleSaveProfile}>
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Form.Item label="First Name" required>
+                              <Input
+                                size="large"
+                                value={profileForm.firstName}
+                                onChange={(e) => setProfileForm({ ...profileForm, firstName: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={12}>
+                            <Form.Item label="Last Name" required>
+                              <Input
+                                size="large"
+                                value={profileForm.lastName}
+                                onChange={(e) => setProfileForm({ ...profileForm, lastName: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Form.Item label="Email Address">
+                          <Input size="large" value={user.email} disabled prefix={<MailOutlined />} />
+                        </Form.Item>
+
+                        <Row gutter={16}>
+                          <Col span={12}>
+                            <Form.Item label="Phone Number">
+                              <Input
+                                size="large"
+                                placeholder="+91 9876543210"
+                                value={profileForm.phone}
+                                onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
+                                prefix={<PhoneOutlined />}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={12}>
+                            <Form.Item label="Emergency Contact">
+                              <Input
+                                size="large"
+                                placeholder="+91 9123456780"
+                                value={profileForm.emergencyContact}
+                                onChange={(e) => setProfileForm({ ...profileForm, emergencyContact: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Divider style={{ margin: "16px 0" }} />
+
+                        <Title level={5} style={{ fontWeight: 700, marginBottom: 16 }}>
+                          Residential Address
+                        </Title>
+
+                        <Form.Item label="Street / Apartment Address">
+                          <Input
+                            size="large"
+                            placeholder="e.g. 12B Park Street, Flat 4A"
+                            value={profileForm.addressLine}
+                            onChange={(e) => setProfileForm({ ...profileForm, addressLine: e.target.value })}
+                          />
+                        </Form.Item>
+
+                        <Row gutter={16}>
+                          <Col span={8}>
+                            <Form.Item label="City">
+                              <Input
+                                size="large"
+                                placeholder="Kolkata"
+                                value={profileForm.city}
+                                onChange={(e) => setProfileForm({ ...profileForm, city: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={8}>
+                            <Form.Item label="State">
+                              <Input
+                                size="large"
+                                placeholder="West Bengal"
+                                value={profileForm.state}
+                                onChange={(e) => setProfileForm({ ...profileForm, state: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col span={8}>
+                            <Form.Item label="Postal Code">
+                              <Input
+                                size="large"
+                                placeholder="700091"
+                                value={profileForm.postalCode}
+                                onChange={(e) => setProfileForm({ ...profileForm, postalCode: e.target.value })}
+                              />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+
+                        <Button
+                          type="primary"
+                          htmlType="submit"
+                          loading={isSavingProfile}
+                          style={{
+                            backgroundColor: "#ff385c",
+                            borderColor: "#ff385c",
+                            borderRadius: 10,
+                            fontWeight: 700,
+                            height: 42,
+                            padding: "0 28px",
+                            marginTop: 8,
+                          }}
+                        >
+                          Save Profile Changes
+                        </Button>
+                      </Form>
+                    </Card>
+                  </Col>
+
+                  {/* Account Summary & Digital Wallet info */}
+                  <Col xs={24} lg={10}>
+                    <Card
+                      style={{ borderRadius: 18, border: "1px solid #e2e8f0" }}
+                      title={<span style={{ fontWeight: 700 }}>Account & Wallet Status</span>}
+                    >
+                      <Space orientation="vertical" size={16} style={{ width: "100%" }}>
+                        <div
+                          style={{
+                            background: "linear-gradient(135deg, #059669 0%, #10b981 100%)",
+                            borderRadius: 16,
+                            padding: 20,
+                            color: "#ffffff",
+                            boxShadow: "0 4px 14px rgba(16, 185, 129, 0.2)",
+                          }}
+                        >
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 12, fontWeight: 700 }}>
+                              AVAILABLE WALLET FUNDS
+                            </Text>
+                            <WalletOutlined style={{ fontSize: 22 }} />
+                          </div>
+                          <Title level={2} style={{ color: "#ffffff", margin: "8px 0 16px", fontWeight: 800 }}>
+                            ₹{(user.wallet || 0).toLocaleString()}
+                          </Title>
+                          <Space size={10}>
+                            <Button
+                              onClick={() => setIsAddMoneyOpen(true)}
+                              style={{
+                                background: "#ffffff",
+                                color: "#059669",
+                                fontWeight: 700,
+                                border: "none",
+                                borderRadius: 8,
+                              }}
+                            >
+                              Add Money
+                            </Button>
+                            <Button
+                              onClick={() => setIsWithdrawOpen(true)}
+                              style={{
+                                background: "rgba(255,255,255,0.2)",
+                                color: "#ffffff",
+                                fontWeight: 600,
+                                border: "none",
+                                borderRadius: 8,
+                              }}
+                            >
+                              Withdraw
+                            </Button>
+                          </Space>
+                        </div>
+
+                        <div style={{ background: "#f8fafc", padding: 16, borderRadius: 14, border: "1px solid #e2e8f0" }}>
+                          <Title level={5} style={{ margin: "0 0 10px", fontWeight: 700 }}>
+                            Member Overview
+                          </Title>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10, fontSize: 13 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <Text type="secondary">Account Role:</Text>
+                              <Tag color="green" style={{ fontWeight: 700 }}>Verified Traveler</Tag>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <Text type="secondary">Total Trips Booked:</Text>
+                              <Text strong>{bookings.length}</Text>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <Text type="secondary">Wishlist Items:</Text>
+                              <Text strong>{wishlist.length}</Text>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between" }}>
+                              <Text type="secondary">Account ID:</Text>
+                              <Text code>#{guestCode}</Text>
+                            </div>
+                          </div>
+                        </div>
+                      </Space>
+                    </Card>
+                  </Col>
+                </Row>
+              </div>
+            ),
+          },
+          {
+            key: "explore",
+            label: <span style={{ fontWeight: 700, fontSize: 15 }}>🏨 Browse Stays ({rooms.length})</span>,
+            children: (
+              <div style={{ marginTop: 8 }}>
+                {rooms.length === 0 ? (
+                  <Card style={{ borderRadius: 20, textAlign: "center", padding: 48, border: "1px solid #e2e8f0" }}>
+                    <Empty description="No stays currently listed. Check back soon!" />
+                  </Card>
+                ) : (
+                  <Row gutter={[20, 20]}>
+                    {rooms.map((room) => {
+                      const isLiked = wishlist.includes(room._id);
+                      const roomImg =
+                        room.images?.[0] ||
+                        "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80";
+
+                      return (
+                        <Col xs={24} sm={12} lg={8} key={room._id}>
+                          <Card
+                            hoverable
+                            style={{
+                              borderRadius: 18,
+                              overflow: "hidden",
+                              border: "1px solid #e2e8f0",
+                              height: "100%",
+                              display: "flex",
+                              flexDirection: "column",
+                            }}
+                            styles={{
+                              body: {
+                                display: "flex",
+                                flexDirection: "column",
+                                justifyContent: "space-between",
+                                flex: 1,
+                                padding: 18,
+                              },
+                            }}
+                            cover={
+                              <div style={{ position: "relative", height: 210, overflow: "hidden" }}>
+                                <img
+                                  alt={room.roomName}
+                                  src={roomImg}
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                                <Tag
+                                  color="rgba(0, 0, 0, 0.65)"
+                                  style={{
+                                    position: "absolute",
+                                    top: 12,
+                                    left: 12,
+                                    color: "#fff",
+                                    fontWeight: 600,
+                                    borderRadius: 6,
+                                    border: "none",
+                                  }}
+                                >
+                                  Room #{room.roomNo}
+                                </Tag>
+
+                                <Button
+                                  type="text"
+                                  shape="circle"
+                                  icon={
+                                    isLiked ? (
+                                      <HeartFilled style={{ color: "#ff385c", fontSize: 18 }} />
+                                    ) : (
+                                      <HeartOutlined style={{ color: "#ffffff", fontSize: 18 }} />
+                                    )
+                                  }
+                                  onClick={() => toggleLike(room._id)}
+                                  style={{
+                                    position: "absolute",
+                                    top: 10,
+                                    right: 10,
+                                    background: "rgba(0,0,0,0.3)",
+                                    backdropFilter: "blur(4px)",
+                                  }}
+                                />
+
+                                <Tag
+                                  color={room.isAvalabile ? "success" : "error"}
+                                  style={{
+                                    position: "absolute",
+                                    bottom: 10,
+                                    left: 12,
+                                    fontWeight: 700,
+                                    borderRadius: 6,
+                                  }}
+                                >
+                                  {room.isAvalabile ? "Available" : "Occupied"}
+                                </Tag>
+                              </div>
+                            }
+                          >
+                            <div>
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  textTransform: "uppercase",
+                                  color: "#ff385c",
+                                }}
+                              >
+                                {room.tag || "Deluxe"}
+                              </Text>
+                              <Title level={5} style={{ margin: "2px 0 6px", fontWeight: 700 }} ellipsis>
+                                {room.roomName}
+                              </Title>
+                              <Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 10 }} ellipsis={{ rows: 2 }}>
+                                {room.description}
+                              </Paragraph>
+                              <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#64748b" }}>
+                                <EnvironmentOutlined />
+                                <span>{room.mapLocation}</span>
+                              </div>
+                            </div>
+
+                            <div
+                              style={{
+                                marginTop: 14,
+                                paddingTop: 12,
+                                borderTop: "1px solid #f1f5f9",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                              }}
+                            >
+                              <div>
+                                <Title level={4} style={{ margin: 0, fontWeight: 800 }}>
+                                  ₹{room.price?.toLocaleString()}
+                                </Title>
+                                <Text type="secondary" style={{ fontSize: 11 }}>
+                                  per night
+                                </Text>
+                              </div>
+
+                              <Button
+                                type="primary"
+                                disabled={!room.isAvalabile}
+                                onClick={() => setBookingRoom(room)}
+                                style={{
+                                  backgroundColor: room.isAvalabile ? "#ff385c" : undefined,
+                                  borderColor: room.isAvalabile ? "#ff385c" : undefined,
+                                  fontWeight: 700,
+                                  borderRadius: 8,
+                                }}
+                              >
+                                {room.isAvalabile ? "Reserve Stay" : "Reserved"}
+                              </Button>
+                            </div>
+                          </Card>
+                        </Col>
+                      );
+                    })}
+                  </Row>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: "wishlist",
+            label: (
+              <span style={{ fontWeight: 700, fontSize: 15 }}>
+                ❤️ Saved Wishlist ({wishlist.length})
+              </span>
+            ),
+            children: (
+              <div style={{ marginTop: 8 }}>
+                {likedRoomObjects.length === 0 ? (
+                  <Card style={{ borderRadius: 20, textAlign: "center", padding: 48, border: "1px solid #e2e8f0" }}>
+                    <Empty description="No saved stays in your wishlist yet. Click the heart icon on any stay to bookmark it!" />
+                  </Card>
+                ) : (
+                  <Row gutter={[20, 20]}>
+                    {likedRoomObjects.map((room) => (
+                      <Col xs={24} sm={12} lg={8} key={room._id}>
+                        <Card
+                          hoverable
+                          style={{ borderRadius: 18, overflow: "hidden", border: "1px solid #e2e8f0" }}
+                          cover={
+                            <img
+                              alt={room.roomName}
+                              src={room.images?.[0] || "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80"}
+                              style={{ height: 180, objectFit: "cover" }}
+                            />
+                          }
+                        >
+                          <Title level={5} style={{ margin: "0 0 4px", fontWeight: 700 }}>
+                            {room.roomName}
+                          </Title>
+                          <Text type="secondary" style={{ fontSize: 12, display: "block", marginBottom: 12 }}>
+                            {room.mapLocation} • ₹{room.price}/night
+                          </Text>
+                          <Button
+                            type="primary"
+                            block
+                            onClick={() => setBookingRoom(room)}
+                            style={{ backgroundColor: "#ff385c", borderColor: "#ff385c", borderRadius: 8, fontWeight: 700 }}
+                          >
+                            Book Now
+                          </Button>
+                        </Card>
+                      </Col>
+                    ))}
+                  </Row>
+                )}
+              </div>
+            ),
+          },
+        ]}
+      />
+
+      {/* Modal: View Full Stay & Booking Details */}
+      {selectedBookingDetail && (
+        <Modal
+          title={
+            <Space align="center" size={8}>
+              <HomeOutlined style={{ color: "#ff385c" }} />
+              <span>Stay Details & Reservation Receipt</span>
+            </Space>
+          }
+          open={!!selectedBookingDetail}
+          onCancel={() => setSelectedBookingDetail(null)}
+          footer={[
+            <Button key="close" onClick={() => setSelectedBookingDetail(null)}>
+              Close
+            </Button>,
+            <Popconfirm
+              key="refund"
+              title="Cancel this reservation?"
+              description="100% instant refund will be credited directly to your digital wallet."
+              onConfirm={() => handleRefund(selectedBookingDetail.booking._id)}
+              okText="Yes, Cancel & Refund"
+              cancelText="Keep Stay"
+              okButtonProps={{ danger: true }}
+            >
+              <Button danger icon={<RollbackOutlined />}>
+                Cancel & Refund
+              </Button>
+            </Popconfirm>,
+          ]}
+          width={640}
+        >
+          {(() => {
+            const b = selectedBookingDetail.booking;
+            const r = selectedBookingDetail.room;
+            const checkIn = b.startDate ? new Date(b.startDate) : new Date();
+            const checkOut = new Date(checkIn);
+            checkOut.setDate(checkOut.getDate() + (b.duration || 1));
+
+            return (
+              <div style={{ marginTop: 12 }}>
+                {r?.images?.[0] && (
+                  <div style={{ height: 220, borderRadius: 12, overflow: "hidden", marginBottom: 16 }}>
+                    <img
+                      src={r.images[0]}
+                      alt={r.roomName}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  </div>
+                )}
+
+                <Descriptions bordered size="small" column={1}>
+                  <Descriptions.Item label="Reservation ID">
+                    <Text code>#{b._id.slice(-8).toUpperCase()}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Room Name">
+                    <Text strong>{r?.roomName || "Deluxe Suite"}</Text> (Room #{r?.roomNo || "N/A"})
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Location">
+                    {r?.mapLocation || "Darjeeling, West Bengal"}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Stay Dates">
+                    {checkIn.toDateString()} ➔ {checkOut.toDateString()} ({b.duration} Night{b.duration > 1 ? "s" : ""})
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Guest Name">
+                    {user.name?.firstName || (user.name as any)?.first} {user.name?.lastName || (user.name as any)?.last}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Total Paid">
+                    <Text strong style={{ color: "#059669", fontSize: 16 }}>
+                      ₹{b.price?.toLocaleString()}
+                    </Text> (Paid via Digital Wallet)
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Cancellation Policy">
+                    <Tag color="success">100% Instant Refund to Wallet</Tag>
+                  </Descriptions.Item>
+                </Descriptions>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
+
+      {/* Modal: Deposit Funds */}
       <Modal
         title="Deposit Funds into Digital Wallet"
         open={isAddMoneyOpen}
         onOk={handleAddMoney}
         onCancel={() => setIsAddMoneyOpen(false)}
         okText="Confirm & Deposit"
-        okButtonProps={{ style: { backgroundColor: "#ff385c", borderColor: "#ff385c" } }}
+        okButtonProps={{ style: { backgroundColor: "#ff385c", borderColor: "#ff385c", fontWeight: 700 } }}
       >
-        <Space orientation="vertical" size={16} style={{ width: "100%", marginTop: 12 }}>
+        <Space direction="vertical" size={16} style={{ width: "100%", marginTop: 12 }}>
           <div>
             <Text strong style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
               Deposit Amount (₹)
@@ -712,7 +1305,7 @@ export default function UserPanel() {
         onCancel={() => setIsWithdrawOpen(false)}
         okText="Submit Withdrawal"
       >
-        <Space orientation="vertical" size={16} style={{ width: "100%", marginTop: 12 }}>
+        <Space direction="vertical" size={16} style={{ width: "100%", marginTop: 12 }}>
           <div>
             <Text strong style={{ fontSize: 13, display: "block", marginBottom: 6 }}>
               Withdrawal Amount (₹)
@@ -742,10 +1335,10 @@ export default function UserPanel() {
           okText="Confirm & Pay via Wallet"
           okButtonProps={{
             disabled: (user.wallet || 0) < bookingRoom.price * bookDuration,
-            style: { backgroundColor: "#ff385c", borderColor: "#ff385c" },
+            style: { backgroundColor: "#ff385c", borderColor: "#ff385c", fontWeight: 700 },
           }}
         >
-          <Space orientation="vertical" size={14} style={{ width: "100%", marginTop: 8 }}>
+          <Space direction="vertical" size={14} style={{ width: "100%", marginTop: 8 }}>
             <div style={{ background: "#f8fafc", padding: 12, borderRadius: 10, border: "1px solid #e2e8f0" }}>
               <Text strong>{bookingRoom.title}</Text>
               <Text type="secondary" style={{ fontSize: 12, display: "block" }}>
@@ -781,7 +1374,9 @@ export default function UserPanel() {
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
               <Text type="secondary">Total Calculation:</Text>
-              <Text strong>₹{bookingRoom.price} × {bookDuration} night(s) = ₹{bookingRoom.price * bookDuration}</Text>
+              <Text strong>
+                ₹{bookingRoom.price} × {bookDuration} night(s) = ₹{bookingRoom.price * bookDuration}
+              </Text>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>

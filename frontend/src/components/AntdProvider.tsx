@@ -46,10 +46,10 @@ export default function AntdProvider({
                 borderTop: "1px solid #e2e8f0",
                 color: "#64748b",
                 fontSize: 13,
-                padding: "20px 24px",
+                padding: "24px 20px",
               }}
             >
-              Go-Went-Gone Multi-Panel System • Built with Next.js & Ant Design
+              © {new Date().getFullYear()} Go-Went-Gone, Inc. · All rights reserved · Privacy · Terms · Sitemap
             </Footer>
           </Layout>
         </AuthProvider>
