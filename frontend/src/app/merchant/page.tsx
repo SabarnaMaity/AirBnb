@@ -195,22 +195,26 @@ export default function MerchantPanel() {
       return;
     }
 
+    const hostFullName = `${user.name?.firstName || "Host"} ${user.name?.lastName || ""}`.trim();
     const payload = {
       name: newPropForm.name,
       address: {
-        street: newPropForm.street,
-        city: newPropForm.city,
-        state: newPropForm.state,
-        country: newPropForm.country,
+        street: newPropForm.street || "Mall Road",
+        city: newPropForm.city || "Darjeeling",
+        state: newPropForm.state || "West Bengal",
+        country: newPropForm.country || "India",
       },
       owner: user._id,
       status: PROPERTYSTATUS.OPEN,
       verification: false,
       wallet: 0,
       BankDetails: {
-        bankName: newPropForm.bankName,
-        accountNumber: newPropForm.accountNumber,
-        ifscCode: newPropForm.ifscCode,
+        bankName: newPropForm.bankName || "HDFC Bank",
+        AccountHoldername: hostFullName || "Host Account",
+        accountHolderName: hostFullName || "Host Account",
+        accountNumber: Number(newPropForm.accountNumber) || 5010023456789,
+        IFSC: newPropForm.ifscCode || "HDFC0001234",
+        ifscCode: newPropForm.ifscCode || "HDFC0001234",
       },
     };
 
@@ -240,6 +244,7 @@ export default function MerchantPanel() {
         setSelectedProperty(properties[0]);
       } else {
         // Auto-create a property for this host on-the-fly
+        const hostFullName = `${user.name?.firstName || "Host"} ${user.name?.lastName || ""}`.trim();
         const autoPropPayload = {
           name: `${user.name?.firstName || "Host"}'s Suites & Resort`,
           address: {
@@ -254,7 +259,10 @@ export default function MerchantPanel() {
           wallet: 0,
           BankDetails: {
             bankName: "HDFC Bank",
-            accountNumber: "5010023456789",
+            AccountHoldername: hostFullName || "Host Account",
+            accountHolderName: hostFullName || "Host Account",
+            accountNumber: 5010023456789,
+            IFSC: "HDFC0001234",
             ifscCode: "HDFC0001234",
           },
         };

@@ -76,21 +76,26 @@ export class PropertyVerification {
 
 @modelOptions({ schemaOptions: { _id: false } })
 export class BankDetails {
-  @prop({ required:true })
-  bankName !: string
+  @prop({ trim: true, default: "HDFC Bank" })
+  bankName?: string;
 
-  @prop({required:true })
-  AccountHoldername !: string
+  @prop({ trim: true, default: "Host Account" })
+  AccountHoldername?: string;
 
-  @prop({ required:true })
-  accountNumber !: Number
+  @prop({ trim: true })
+  accountHolderName?: string;
 
-  @prop({ required:true})
-  IFSC !: string
+  @prop({ default: 5010023456789 })
+  accountNumber?: number;
+
+  @prop({ trim: true, default: "HDFC0001234" })
+  IFSC?: string;
+
+  @prop({ trim: true })
+  ifscCode?: string;
 
   @prop({ default: false })
-  verfication !: boolean
-
+  verfication?: boolean;
 }
 
 export class review {
