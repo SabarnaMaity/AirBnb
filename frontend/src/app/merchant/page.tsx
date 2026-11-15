@@ -28,7 +28,9 @@ import {
   Empty,
   Avatar,
   Alert,
+  Upload,
 } from "antd";
+import type { UploadFile, UploadProps } from "antd";
 import {
   ShopOutlined,
   PlusOutlined,
@@ -42,6 +44,7 @@ import {
   LoginOutlined,
   CloudUploadOutlined,
   DeleteOutlined,
+  EyeOutlined,
 } from "@ant-design/icons";
 
 const { Title, Text, Paragraph } = Typography;
@@ -60,10 +63,19 @@ export default function MerchantPanel() {
   const [isAddPhotoOpen, setIsAddPhotoOpen] = useState(false);
   const [isAddPropertyOpen, setIsAddPropertyOpen] = useState(false);
   const [selectedRoomForPhoto, setSelectedRoomForPhoto] = useState<Room | null>(null);
-  const [newPhotoUrl, setNewPhotoUrl] = useState("");
-  const [newPhotosList, setNewPhotosList] = useState<string[]>([]);
-  const [singleUrlInput, setSingleUrlInput] = useState("");
-  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Ant Design Upload states
+  const [fileList, setFileList] = useState<UploadFile[]>([]);
+  const [addPhotoFileList, setAddPhotoFileList] = useState<UploadFile[]>([]);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState("");
+  const [previewTitle, setPreviewTitle] = useState("");
+
+  const handlePreview = async (file: UploadFile) => {
+    setPreviewImage(file.url || (file.response as any)?.url || (file.thumbUrl as string));
+    setPreviewOpen(true);
+    setPreviewTitle(file.name || "Photo Preview");
+  };
 
   // New Room Form
   const [newRoomForm, setNewRoomForm] = useState({
@@ -275,6 +287,7 @@ export default function MerchantPanel() {
     if (res.success) {
       message.success(`Room '${newRoomForm.roomName}' created with ${payload.images.length} photo(s)!`);
       setIsAddRoomOpen(false);
+      setFileList([]);
       setNewRoomForm({
         roomName: "",
         title: "",
@@ -292,96 +305,22 @@ export default function MerchantPanel() {
     }
   };
 
-  // Multiple images upload to Cloudinary for new room
-  const handleRoomImagesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-
-    setUploadingImage(true);
-    message.loading({ content: `Uploading ${files.length} photo(s) to Cloudinary...`, key: "cld_upload" });
-    try {
-      const res = await api.uploadMultipleImages(files);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const uploadedUrls = res.data.map((item) => item.url);
-        setNewRoomForm((prev) => ({
-          ...prev,
-          images: [...prev.images, ...uploadedUrls],
-        }));
-        message.success({
-          content: `Uploaded ${uploadedUrls.length} photo(s) to Cloudinary!`,
-          key: "cld_upload",
-        });
-      } else {
-        message.error({
-          content: res.message || "Failed to upload images to Cloudinary",
-          key: "cld_upload",
-        });
-      }
-    } catch (err: any) {
-      message.error({ content: "Cloudinary upload failed", key: "cld_upload" });
-    } finally {
-      setUploadingImage(false);
-      e.target.value = "";
-    }
-  };
-
-  const handleRemoveRoomImage = (indexToRemove: number) => {
-    setNewRoomForm((prev) => ({
-      ...prev,
-      images: prev.images.filter((_, idx) => idx !== indexToRemove),
-    }));
-  };
-
-  const handleAddImageUrl = () => {
-    if (!singleUrlInput.trim()) return;
-    setNewRoomForm((prev) => ({
-      ...prev,
-      images: [...prev.images, singleUrlInput.trim()],
-    }));
-    setSingleUrlInput("");
-  };
-
-  // Multiple photos upload for existing room
-  const handleAddPhotosToRoomUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    if (files.length === 0) return;
-
-    setUploadingImage(true);
-    message.loading({ content: `Uploading ${files.length} photo(s) to Cloudinary...`, key: "cld_room_upload" });
-    try {
-      const res = await api.uploadMultipleImages(files);
-      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
-        const uploadedUrls = res.data.map((item) => item.url);
-        setNewPhotosList((prev) => [...prev, ...uploadedUrls]);
-        message.success({
-          content: `Uploaded ${uploadedUrls.length} photo(s) to Cloudinary!`,
-          key: "cld_room_upload",
-        });
-      } else {
-        message.error({
-          content: res.message || "Failed to upload photos",
-          key: "cld_room_upload",
-        });
-      }
-    } catch (err) {
-      message.error({ content: "Cloudinary upload failed", key: "cld_room_upload" });
-    } finally {
-      setUploadingImage(false);
-      e.target.value = "";
-    }
-  };
-
   // Save batch photos to existing room
   const handleSavePhotosToRoom = async () => {
-    if (!selectedRoomForPhoto || newPhotosList.length === 0) {
-      message.error("Please upload or provide at least one photo");
+    if (!selectedRoomForPhoto) return;
+    const urlsToAdd = addPhotoFileList
+      .map((f) => (f.response as any)?.url || f.url)
+      .filter(Boolean) as string[];
+
+    if (urlsToAdd.length === 0) {
+      message.error("Please upload at least one photo");
       return;
     }
 
-    const res = await api.addRoomImages(selectedRoomForPhoto._id, newPhotosList);
+    const res = await api.addRoomImages(selectedRoomForPhoto._id, urlsToAdd);
     if (res.success) {
-      message.success(`Added ${newPhotosList.length} photo(s) to ${selectedRoomForPhoto.roomName}!`);
-      setNewPhotosList([]);
+      message.success(`Added ${urlsToAdd.length} photo(s) to ${selectedRoomForPhoto.roomName}!`);
+      setAddPhotoFileList([]);
       setIsAddPhotoOpen(false);
       await fetchData();
     } else {
@@ -936,169 +875,77 @@ export default function MerchantPanel() {
             />
           </div>
 
-          {/* Multi-Photo Cloudinary Upload */}
+          {/* Ant Design Official Picture-Card Multi-Upload */}
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
               <Text strong style={{ fontSize: 13, color: "#0f172a" }}>
-                Room Gallery & Photos ({newRoomForm.images.length} added)
+                Room Photos ({fileList.length} uploaded)
               </Text>
-              {newRoomForm.images.length > 0 && (
+              {fileList.length > 0 && (
                 <Tag color="blue" style={{ margin: 0, fontWeight: 600 }}>
                   Cover: Photo #1
                 </Tag>
               )}
             </div>
 
-            {/* Drag & Drop Multi-file Uploader */}
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "20px 16px",
-                border: "2px dashed #93c5fd",
-                borderRadius: 12,
-                background: "#f8fafc",
-                cursor: uploadingImage ? "not-allowed" : "pointer",
-                transition: "all 0.2s",
-                textAlign: "center",
+            <Upload
+              listType="picture-card"
+              multiple={true}
+              fileList={fileList}
+              accept="image/*"
+              customRequest={async (options) => {
+                const { file, onSuccess, onError } = options;
+                try {
+                  const res = await api.uploadImage(file as File);
+                  if (res.success && res.data?.url) {
+                    onSuccess?.(res.data);
+                    const uploadedUrl = res.data.url;
+                    setNewRoomForm((prev) => ({
+                      ...prev,
+                      images: [...prev.images, uploadedUrl],
+                    }));
+                    message.success(`${(file as File).name} uploaded to Cloudinary!`);
+                  } else {
+                    onError?.(new Error(res.message || "Upload failed"));
+                    message.error(res.message || "Failed to upload image");
+                  }
+                } catch (err: any) {
+                  onError?.(err);
+                  message.error("Failed to upload image to Cloudinary");
+                }
               }}
+              onChange={({ fileList: newFileList }) => {
+                setFileList(newFileList);
+              }}
+              onRemove={(file) => {
+                const urlToRemove = (file.response as any)?.url || file.url;
+                if (urlToRemove) {
+                  setNewRoomForm((prev) => ({
+                    ...prev,
+                    images: prev.images.filter((img) => img !== urlToRemove),
+                  }));
+                }
+              }}
+              onPreview={handlePreview}
             >
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={uploadingImage}
-                onChange={handleRoomImagesUpload}
-                style={{ display: "none" }}
-              />
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "50%",
-                  background: "#eff6ff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#2563eb",
-                  fontSize: 22,
-                  marginBottom: 8,
-                }}
-              >
-                <CloudUploadOutlined />
-              </div>
-              <Text strong style={{ fontSize: 13, color: "#0f172a" }}>
-                Click to browse or drop multiple room photos
-              </Text>
-              <Text type="secondary" style={{ fontSize: 11, marginTop: 2 }}>
-                Select multiple photos at once • Auto-uploaded directly to Cloudinary
-              </Text>
-            </label>
-
-            {uploadingImage && (
-              <div style={{ textAlign: "center", padding: "10px 0" }}>
-                <Spin size="small" />
-                <Text style={{ fontSize: 12, marginLeft: 8, color: "#2563eb", fontWeight: 600 }}>
-                  Uploading photos to Cloudinary...
-                </Text>
-              </div>
-            )}
-
-            {/* Quick URL Input as an alternative */}
-            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <Input
-                placeholder="Or paste an image URL here..."
-                value={singleUrlInput}
-                onChange={(e) => setSingleUrlInput(e.target.value)}
-                onPressEnter={handleAddImageUrl}
-                size="small"
-              />
-              <Button size="small" onClick={handleAddImageUrl} disabled={!singleUrlInput.trim()}>
-                + Add URL
-              </Button>
-            </div>
-
-            {/* Uploaded Gallery Grid */}
-            {newRoomForm.images.length > 0 && (
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fill, minmax(90px, 1fr))",
-                  gap: 10,
-                  marginTop: 12,
-                  maxHeight: 220,
-                  overflowY: "auto",
-                  padding: "4px 2px",
-                }}
-              >
-                {newRoomForm.images.map((imgUrl, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      position: "relative",
-                      borderRadius: 8,
-                      overflow: "hidden",
-                      border: idx === 0 ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                      height: 80,
-                    }}
-                  >
-                    <img
-                      src={imgUrl}
-                      alt={`Room photo ${idx + 1}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                    {idx === 0 && (
-                      <span
-                        style={{
-                          position: "absolute",
-                          bottom: 2,
-                          left: 2,
-                          background: "#2563eb",
-                          color: "#fff",
-                          fontSize: 9,
-                          fontWeight: 700,
-                          padding: "1px 5px",
-                          borderRadius: 4,
-                        }}
-                      >
-                        COVER
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRoomImage(idx)}
-                      style={{
-                        position: "absolute",
-                        top: 3,
-                        right: 3,
-                        background: "rgba(0, 0, 0, 0.65)",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "50%",
-                        width: 20,
-                        height: 20,
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontSize: 12,
-                        lineHeight: 1,
-                      }}
-                      title="Remove photo"
-                    >
-                      ×
-                    </button>
+              {fileList.length >= 10 ? null : (
+                <div style={{ textAlign: "center", padding: "8px 0" }}>
+                  <PlusOutlined style={{ fontSize: 20, color: "#2563eb" }} />
+                  <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "#0f172a" }}>
+                    Add Photos
                   </div>
-                ))}
-              </div>
-            )}
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>Multiple OK</div>
+                </div>
+              )}
+            </Upload>
+            <Text type="secondary" style={{ fontSize: 11, display: "block", marginTop: 4 }}>
+              Select multiple photos at once (PNG, JPG, WEBP). Stored directly on Cloudinary CDN.
+            </Text>
           </div>
         </Space>
       </Modal>
 
-      {/* Modal: Add Photo */}
+      {/* Modal: Add Photo using Ant Design Upload */}
       {selectedRoomForPhoto && (
         <Modal
           title={`Add Photos to ${selectedRoomForPhoto.roomName}`}
@@ -1106,158 +953,71 @@ export default function MerchantPanel() {
           onOk={handleSavePhotosToRoom}
           onCancel={() => {
             setIsAddPhotoOpen(false);
-            setNewPhotosList([]);
+            setAddPhotoFileList([]);
           }}
-          okText={`Save ${newPhotosList.length > 0 ? `${newPhotosList.length} ` : ""}Photo(s) to Room`}
+          okText={`Save ${addPhotoFileList.filter((f) => f.status === "done").length} Photo(s) to Room`}
           okButtonProps={{
             style: { backgroundColor: "#2563eb", borderColor: "#2563eb" },
-            loading: uploadingImage,
-            disabled: newPhotosList.length === 0,
+            disabled: addPhotoFileList.filter((f) => f.status === "done").length === 0,
           }}
         >
           <Space direction="vertical" size={14} style={{ width: "100%", marginTop: 12 }}>
-            <label
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "20px 16px",
-                border: "2px dashed #93c5fd",
-                borderRadius: 12,
-                background: "#f8fafc",
-                cursor: uploadingImage ? "not-allowed" : "pointer",
-                textAlign: "center",
+            <Text strong style={{ fontSize: 13, color: "#0f172a" }}>
+              Upload Room Photos to Cloudinary
+            </Text>
+
+            <Upload
+              listType="picture-card"
+              multiple={true}
+              fileList={addPhotoFileList}
+              accept="image/*"
+              customRequest={async (options) => {
+                const { file, onSuccess, onError } = options;
+                try {
+                  const res = await api.uploadImage(file as File);
+                  if (res.success && res.data?.url) {
+                    onSuccess?.(res.data);
+                    message.success(`${(file as File).name} uploaded to Cloudinary!`);
+                  } else {
+                    onError?.(new Error(res.message || "Upload failed"));
+                    message.error(res.message || "Failed to upload image");
+                  }
+                } catch (err: any) {
+                  onError?.(err);
+                  message.error("Failed to upload image to Cloudinary");
+                }
               }}
+              onChange={({ fileList: newFileList }) => {
+                setAddPhotoFileList(newFileList);
+              }}
+              onPreview={handlePreview}
             >
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={uploadingImage}
-                onChange={handleAddPhotosToRoomUpload}
-                style={{ display: "none" }}
-              />
-              <div
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: "50%",
-                  background: "#eff6ff",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#2563eb",
-                  fontSize: 22,
-                  marginBottom: 8,
-                }}
-              >
-                <CloudUploadOutlined />
-              </div>
-              <Text strong style={{ fontSize: 13, color: "#0f172a" }}>
-                Select Multiple Photos (Cloudinary)
-              </Text>
-              <Text type="secondary" style={{ fontSize: 11, marginTop: 2 }}>
-                Click to browse multiple photos from your device
-              </Text>
-            </label>
-
-            {uploadingImage && (
-              <div style={{ textAlign: "center", padding: "6px 0" }}>
-                <Spin size="small" />
-                <Text style={{ fontSize: 12, marginLeft: 8, color: "#2563eb" }}>
-                  Uploading to Cloudinary...
-                </Text>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 8 }}>
-              <Input
-                placeholder="Or paste an image URL..."
-                value={singleUrlInput}
-                onChange={(e) => setSingleUrlInput(e.target.value)}
-                onPressEnter={() => {
-                  if (singleUrlInput.trim()) {
-                    setNewPhotosList((prev) => [...prev, singleUrlInput.trim()]);
-                    setSingleUrlInput("");
-                  }
-                }}
-                size="small"
-              />
-              <Button
-                size="small"
-                onClick={() => {
-                  if (singleUrlInput.trim()) {
-                    setNewPhotosList((prev) => [...prev, singleUrlInput.trim()]);
-                    setSingleUrlInput("");
-                  }
-                }}
-                disabled={!singleUrlInput.trim()}
-              >
-                + Add
-              </Button>
-            </div>
-
-            {newPhotosList.length > 0 && (
-              <div>
-                <Text strong style={{ fontSize: 12, display: "block", marginBottom: 6 }}>
-                  Photos to be added ({newPhotosList.length}):
-                </Text>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fill, minmax(80px, 1fr))",
-                    gap: 8,
-                    maxHeight: 180,
-                    overflowY: "auto",
-                  }}
-                >
-                  {newPhotosList.map((url, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        position: "relative",
-                        borderRadius: 8,
-                        overflow: "hidden",
-                        border: "1px solid #e2e8f0",
-                        height: 70,
-                      }}
-                    >
-                      <img
-                        src={url}
-                        alt="Preview"
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setNewPhotosList((prev) => prev.filter((_, i) => i !== idx))}
-                        style={{
-                          position: "absolute",
-                          top: 2,
-                          right: 2,
-                          background: "rgba(0,0,0,0.6)",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: "50%",
-                          width: 18,
-                          height: 18,
-                          fontSize: 11,
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
+              {addPhotoFileList.length >= 10 ? null : (
+                <div style={{ textAlign: "center", padding: "8px 0" }}>
+                  <PlusOutlined style={{ fontSize: 20, color: "#2563eb" }} />
+                  <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: "#0f172a" }}>
+                    Add Photos
+                  </div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>Select Multiple</div>
                 </div>
-              </div>
-            )}
+              )}
+            </Upload>
+            <Text type="secondary" style={{ fontSize: 11, display: "block" }}>
+              Select multiple photos at once. Click 'Save' when uploads complete.
+            </Text>
           </Space>
         </Modal>
       )}
+
+      {/* Lightbox Preview Modal */}
+      <Modal
+        open={previewOpen}
+        title={previewTitle}
+        footer={null}
+        onCancel={() => setPreviewOpen(false)}
+      >
+        <img alt="preview" style={{ width: "100%", borderRadius: 8 }} src={previewImage} />
+      </Modal>
 
       {/* Modal: Register Property */}
       <Modal
