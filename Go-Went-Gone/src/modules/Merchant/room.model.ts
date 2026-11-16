@@ -14,7 +14,7 @@ import { Booking } from "../../Base/Base_Model/common_Model";
 
 
 export class Room {
-    @prop({ required: true, ref: () => Property , type: () => mongoose.Types.ObjectId })
+    @prop({ required: true, ref: 'Property' , type: () => mongoose.Types.ObjectId })
     property !: Ref<Property>
 
     @prop({ required: true })
@@ -50,7 +50,7 @@ export class Room {
     @prop({default:true})
     isAvalabile !: boolean
 
-    @prop({ref:()=>Booking , type:()=> [mongoose.Types.ObjectId]})
+    @prop({ref:'Booking' , type:()=> [mongoose.Types.ObjectId]})
     Booking !: Ref<Booking>[]
 
 }

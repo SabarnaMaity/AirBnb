@@ -19,7 +19,7 @@ export class Property{
     @prop ({required:true,type:Address})
     address!: Address
 
-    @prop ({required:true,ref:()=> User,  type:()=>mongoose.Types.ObjectId})
+    @prop ({required:true,ref:'User',  type:()=>mongoose.Types.ObjectId})
     owner!: Ref<User>
 
     @prop ({default:PROPERTYSTATUS.CLOSE,enum:PROPERTYSTATUS})
@@ -37,7 +37,7 @@ export class Property{
     @prop ({type:BankDetails})
     BankDetails !: BankDetails
 
-    @prop({ref:()=> Room , type:()=>[mongoose.Types.ObjectId]})
+    @prop({ref:'Room' , type:()=>[mongoose.Types.ObjectId]})
     rooms !: Ref<Room>[]
 
     @prop({default:0})
@@ -57,13 +57,13 @@ export const PropertyModel = getModelForClass(Property);
 })
 
 export class MerchantPayment {
-    @prop({required:true,ref:()=>User,type:()=> mongoose.Types.ObjectId})
+    @prop({required:true,ref:'User',type:()=> mongoose.Types.ObjectId})
     userId !: Ref<User>
 
-    @prop({required:true,ref:()=>Room,type:()=> mongoose.Types.ObjectId})
+    @prop({required:true,ref:'Room',type:()=> mongoose.Types.ObjectId})
     room !: Ref<Room>
 
-    @prop({required:true,ref:()=>Property,type:()=> mongoose.Types.ObjectId})
+    @prop({required:true,ref:'Property',type:()=> mongoose.Types.ObjectId})
     property !: Ref<Property>
 
     @prop({required:true})

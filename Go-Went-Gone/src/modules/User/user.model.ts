@@ -51,7 +51,7 @@ export const UserModel = getModelForClass(User);
 })
 
 export class addWallet{
-    @prop({required:true,type:()=> mongoose.Types.ObjectId,ref:()=>User})
+    @prop({required:true,type:()=> mongoose.Types.ObjectId,ref:'User'})
     userId !: Ref<User>
 
     @prop({required:true})

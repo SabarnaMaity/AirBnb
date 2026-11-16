@@ -179,6 +179,8 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(data),
     }),
+  deleteRoom: (id: string) =>
+    request(`/api/merchant/room/delete?_id=${id}`, { method: "DELETE" }),
   addRoomImages: (roomId: string, images: string[]) =>
     request("/api/merchant/room/add-image", {
       method: "PUT",

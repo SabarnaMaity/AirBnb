@@ -5,7 +5,7 @@
     "outDir": "dist",
     // Module system & target
     "module": "commonjs",
-    "target": "ES5",
+    "target": "ES2022",
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     // Type checking

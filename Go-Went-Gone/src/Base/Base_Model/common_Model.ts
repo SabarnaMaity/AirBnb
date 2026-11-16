@@ -15,7 +15,7 @@ import { Property } from "../../modules/Merchant/merchant.model";
 })
 
 export class Booking {
-  @prop({ required: true, ref: User, type: () => mongoose.Types.ObjectId })
+  @prop({ required: true, ref: 'User', type: () => mongoose.Types.ObjectId })
   user !: Ref<User>
 
   @prop({ required: true })
@@ -27,7 +27,7 @@ export class Booking {
   @prop({ required: true, })
   price !: number
 
-  @prop({ required: true, ref: () => Room, type: () => mongoose.Types.ObjectId })
+  @prop({ required: true, ref: 'Room', type: () => mongoose.Types.ObjectId })
   room !: Ref<Room>
 
   @prop({ type: () => [UserDocument] })
@@ -39,7 +39,7 @@ export class Booking {
   @prop({ default: "CONFIRMED" })
   status !: string;
 
-  @prop({ type: () => [mongoose.Types.ObjectId], ref: () => Payment })
+  @prop({ type: () => [mongoose.Types.ObjectId], ref: 'Payment' })
   Payment !: Ref<Payment>[]
 
 }
@@ -57,10 +57,10 @@ export const BookingModel = getModelForClass(Booking);
 
 export class Payment {
 
-  @prop({ required: true, ref: () => User, type: () => mongoose.Types.ObjectId })
+  @prop({ required: true, ref: 'User', type: () => mongoose.Types.ObjectId })
   user !: Ref<User>
 
-  @prop({ required: true, ref: () => Room, type: () => mongoose.Types.ObjectId })
+  @prop({ required: true, ref: 'Room', type: () => mongoose.Types.ObjectId })
   room !: Ref<Room>
 
   @prop({ required: true })
@@ -82,7 +82,7 @@ export const PaymentModel = getModelForClass(Payment);
 })
 
 export class OTP {
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => User })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'User' })
   user !: Ref<User>
 
   @prop({ type: () => String })
@@ -103,13 +103,13 @@ export const OtpModel = getModelForClass(OTP)
 })
 
 export class BookingHistory {
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => User })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'User' })
   user !: Ref<User>
 
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => Room })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'Room' })
   room !: Ref<Room>
 
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => Payment })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'Payment' })
   payment !: Ref<Payment>
 }
 
@@ -126,10 +126,10 @@ export const BookingHistoryModel = getModelForClass(BookingHistory);
 })
 
 export class LikeList {
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => User })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'User' })
   user !: Ref<User>
 
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => Room })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'Room' })
   room !: Ref<Room>
 }
 
@@ -143,7 +143,7 @@ export const LikeListModel = getModelForClass(LikeList);
 })
 
 export class Notification {
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => User })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'User' })
   user !: Ref<User>
 
   @prop({ required: true })
@@ -163,10 +163,10 @@ export const NotificationModel = getModelForClass(Notification);
   }
 })
 export class TotalBookingAmount {
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => User })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'User' })
   user !: Ref<User>
 
-  @prop({ type: () => mongoose.Types.ObjectId, ref: () => Room })
+  @prop({ type: () => mongoose.Types.ObjectId, ref: 'Room' })
   room !: Ref<Room>
 
   @prop({required:true})
@@ -185,13 +185,13 @@ export const TotalBookingAmountModel = getModelForClass(TotalBookingAmount);
 
 export class Commission{
 
-  @prop({required:true,ref:()=>User,type:()=> mongoose.Types.ObjectId})
+  @prop({required:true,ref:'User',type:()=> mongoose.Types.ObjectId})
   user !: Ref<User>
 
-  @prop({required:true,ref:()=>Property,type:()=> mongoose.Types.ObjectId})
+  @prop({required:true,ref:'Property',type:()=> mongoose.Types.ObjectId})
   property !: Ref<Property>
 
-  @prop({ref:()=>Room,type:()=> mongoose.Types.ObjectId})
+  @prop({ref:'Room',type:()=> mongoose.Types.ObjectId})
   room !: Ref<Room>
 
   @prop({enum:Object.values(CommissionType),default:CommissionType.RENT})
@@ -212,7 +212,7 @@ export const CommissionModel = getModelForClass(Commission)
   }
 })
 export class withdraw{
-    @prop({required:true,ref:()=>User,type:()=> mongoose.Types.ObjectId})
+    @prop({required:true,ref:'User',type:()=> mongoose.Types.ObjectId})
     user !: Ref<User>
 
     @prop({required:true})
